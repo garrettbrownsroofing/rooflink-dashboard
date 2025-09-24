@@ -25,6 +25,16 @@ export interface MCPEndpoint {
 class RoofLinkMCPClient {
   private connection: MCPConnection | null = null
   private serverUrl = 'https://developers.rooflink.com/mcp'
+  private apiKey: string | null = null
+
+  setApiKey(apiKey: string): void {
+    this.apiKey = apiKey
+    console.log('API key set for RoofLink authentication')
+  }
+
+  getApiKey(): string | null {
+    return this.apiKey
+  }
 
   async connect(): Promise<boolean> {
     try {
@@ -113,12 +123,37 @@ class RoofLinkMCPClient {
       }
 
       const responseData = await response.text()
-      const parsed = JSON.parse(responseData.split('\ndata: ')[1])
+      console.log('Raw response from MCP server for', endpoint, ':', responseData)
+      
+      // Parse the response - it might be in different formats
+      let parsed
+      try {
+        if (responseData.includes('data: ')) {
+          // Server-sent events format
+          const dataPart = responseData.split('data: ')[1]
+          parsed = JSON.parse(dataPart)
+        } else {
+          // Direct JSON response
+          parsed = JSON.parse(responseData)
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response for', endpoint, ':', parseError)
+        console.log('Response was:', responseData)
+        throw new Error(`Failed to parse response: ${parseError}`)
+      }
+      
+      console.log('Parsed response for', endpoint, ':', parsed)
+      
+      // Check if we got an error from the MCP server
+      if (parsed.error) {
+        throw new Error(`MCP server error: ${parsed.error.message || parsed.error}`)
+      }
       
       return {
         endpoint,
         data: parsed.result,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        rawResponse: parsed
       }
     } catch (error) {
       console.error(`Error fetching data from ${endpoint}:`, error)
@@ -168,6 +203,19 @@ class RoofLinkMCPClient {
     try {
       console.log(`Fetching RoofLink data from API path: ${apiPath}`)
       
+      // Prepare headers for the API request
+      const headers: { name: string; value: string }[] = [
+        { name: 'Accept', value: 'application/json' }
+      ]
+      
+      // Add API key if available
+      if (this.apiKey) {
+        headers.push({ name: 'X-API-KEY', value: this.apiKey })
+        console.log('Using API key for authentication')
+      } else {
+        console.warn('No API key provided - request may fail with authentication error')
+      }
+      
       // Use the execute-request tool to call the actual RoofLink API
       const response = await fetch(this.serverUrl, {
         method: 'POST',
@@ -181,11 +229,10 @@ class RoofLinkMCPClient {
           params: {
             name: 'execute-request',
             arguments: {
-              method: 'GET',
-              url: `https://integrate.rooflink.com/roof_link_endpoints/api/light${apiPath}`,
-              headers: {
-                'Accept': 'application/json',
-                'Authorization': 'Bearer YOUR_TOKEN_HERE' // This should be configured
+              harRequest: {
+                method: 'get',
+                url: `https://integrate.rooflink.com/roof_link_endpoints/api/light${apiPath}`,
+                headers: headers
               }
             }
           },
@@ -198,12 +245,42 @@ class RoofLinkMCPClient {
       }
 
       const responseData = await response.text()
-      const parsed = JSON.parse(responseData.split('\ndata: ')[1])
+      console.log('Raw response from MCP server:', responseData)
+      
+      // Parse the response - it might be in different formats
+      let parsed
+      try {
+        if (responseData.includes('data: ')) {
+          // Server-sent events format
+          const dataPart = responseData.split('data: ')[1]
+          parsed = JSON.parse(dataPart)
+        } else {
+          // Direct JSON response
+          parsed = JSON.parse(responseData)
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError)
+        console.log('Response was:', responseData)
+        throw new Error(`Failed to parse response: ${parseError}`)
+      }
+      
+      console.log('Parsed response:', parsed)
+      
+      // Check if we got an error from the MCP server
+      if (parsed.error) {
+        throw new Error(`MCP server error: ${parsed.error.message || parsed.error}`)
+      }
+      
+      // Check if the result contains an error
+      if (parsed.result?.isError) {
+        throw new Error(`API Error: ${parsed.result.content?.[0]?.text || 'Unknown error'}`)
+      }
       
       return {
         endpoint: apiPath,
         data: parsed.result,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        rawResponse: parsed
       }
     } catch (error) {
       console.error(`Error fetching RoofLink data from ${apiPath}:`, error)
