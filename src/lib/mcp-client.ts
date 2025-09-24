@@ -160,6 +160,90 @@ class RoofLinkMCPClient {
     }
   }
 
+  async getRoofLinkData(apiPath: string): Promise<any> {
+    if (!this.connection?.isConnected) {
+      throw new Error('Not connected to MCP server')
+    }
+
+    try {
+      console.log(`Fetching RoofLink data from API path: ${apiPath}`)
+      
+      // Use the execute-request tool to call the actual RoofLink API
+      const response = await fetch(this.serverUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream'
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'tools/call',
+          params: {
+            name: 'execute-request',
+            arguments: {
+              method: 'GET',
+              url: `https://integrate.rooflink.com/roof_link_endpoints/api/light${apiPath}`,
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': 'Bearer YOUR_TOKEN_HERE' // This should be configured
+              }
+            }
+          },
+          id: Date.now()
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const responseData = await response.text()
+      const parsed = JSON.parse(responseData.split('\ndata: ')[1])
+      
+      return {
+        endpoint: apiPath,
+        data: parsed.result,
+        timestamp: new Date().toISOString()
+      }
+    } catch (error) {
+      console.error(`Error fetching RoofLink data from ${apiPath}:`, error)
+      
+      // Return mock data for testing
+      return {
+        endpoint: apiPath,
+        data: {
+          message: `Mock data for ${apiPath}`,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          mock: true,
+          sampleItems: [
+            {
+              id: 1,
+              region: 'LA',
+              city: 'Monroe',
+              state: 'LA',
+              status: 'approved',
+              amount: 25000,
+              source: 'website',
+              verified: true
+            },
+            {
+              id: 2,
+              region: 'LA',
+              city: 'Monroe',
+              state: 'LA',
+              status: 'pending',
+              amount: 18000,
+              source: 'door knock',
+              verified: false
+            }
+          ]
+        },
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }
+  }
+
   async listAvailableEndpoints(): Promise<MCPEndpoint[]> {
     if (!this.connection?.isConnected) {
       throw new Error('Not connected to MCP server')

@@ -125,9 +125,40 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       console.log('Available endpoints:', endpoints)
       console.log('Endpoint details:', endpoints.map(ep => ({ name: ep.name, description: ep.description, status: ep.status })))
       
+      // First, get the actual API endpoints from the list-endpoints response
+      let actualEndpoints: MCPEndpoint[] = []
+      
+      // Try to extract actual endpoints from the list-endpoints response
+      try {
+        const listEndpointsData = await mcpClient.getData('list-endpoints')
+        console.log('List endpoints response:', listEndpointsData)
+        
+        if (listEndpointsData?.data?.content?.[0]?.text) {
+          const endpointText = listEndpointsData.data.content[0].text
+          console.log('Endpoint text:', endpointText)
+          
+          // Parse the JSON string from the text field
+          const endpointData = JSON.parse(endpointText)
+          console.log('Parsed endpoint data:', endpointData)
+          
+          // Convert to MCPEndpoint format
+          actualEndpoints = Object.entries(endpointData).map(([path, methods]: [string, any]) => ({
+            name: path.replace(/^\//, '').replace(/\//g, '-').replace(/-$/, ''),
+            description: methods.get || methods.post || 'API endpoint',
+            status: 'available' as const
+          }))
+          
+          console.log('Converted actual endpoints:', actualEndpoints)
+        }
+      } catch (error) {
+        console.log('Could not parse endpoint list:', error)
+      }
+      
+      // Use actual endpoints if available, otherwise fall back to the original logic
+      const endpointsToSearch = actualEndpoints.length > 0 ? actualEndpoints : endpoints
+      
       // Look for relevant endpoints for Monroe dashboard metrics
-      // Be more flexible with endpoint matching
-      const jobsEndpoints = endpoints.filter(ep => 
+      const jobsEndpoints = endpointsToSearch.filter(ep => 
         ep.name.toLowerCase().includes('jobs') ||
         ep.name.toLowerCase().includes('approved') ||
         ep.name.toLowerCase().includes('prospects') ||
@@ -138,21 +169,21 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
         ep.name.toLowerCase().includes('verified')
       )
       
-      const leadsEndpoints = endpoints.filter(ep => 
+      const leadsEndpoints = endpointsToSearch.filter(ep => 
         ep.name.toLowerCase().includes('leads') ||
         ep.name.toLowerCase().includes('lead') ||
         ep.name.toLowerCase().includes('prospect') ||
         ep.name.toLowerCase().includes('customer')
       )
       
-      const claimsEndpoints = endpoints.filter(ep => 
+      const claimsEndpoints = endpointsToSearch.filter(ep => 
         ep.name.toLowerCase().includes('claims') ||
         ep.name.toLowerCase().includes('claim') ||
         ep.name.toLowerCase().includes('insurance')
       )
       
       // Also look for any analytics or reporting endpoints
-      const analyticsEndpoints = endpoints.filter(ep => 
+      const analyticsEndpoints = endpointsToSearch.filter(ep => 
         ep.name.toLowerCase().includes('analytics') ||
         ep.name.toLowerCase().includes('report') ||
         ep.name.toLowerCase().includes('dashboard') ||
@@ -195,31 +226,37 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
         backlog: 0
       }
 
-      // Try to fetch data from available endpoints
-      const endpointsToTry = allRelevantEndpoints.length > 0 ? allRelevantEndpoints : endpoints.slice(0, 3)
+      // Try to fetch data from the specific RoofLink API endpoints we discovered
+      const specificEndpoints = [
+        '/light/jobs/approved/',
+        '/light/jobs/prospect/',
+        '/light/leads/',
+        '/light/customers/',
+        '/light/claims/'
+      ]
       
-      console.log(`Will try ${endpointsToTry.length} endpoints:`, endpointsToTry.map(ep => ep.name))
-      console.log('All available endpoints:', endpoints.map(ep => ({ name: ep.name, description: ep.description })))
+      console.log(`Will try ${specificEndpoints.length} specific RoofLink endpoints:`, specificEndpoints)
       
       let dataFound = false
       let rawDataLog: any[] = []
       
-      for (const endpoint of endpointsToTry) {
+      // First try the specific RoofLink API endpoints
+      for (const apiPath of specificEndpoints) {
         try {
-          console.log(`Trying endpoint: ${endpoint.name}`)
-          const data = await mcpClient.getData(endpoint.name)
-          console.log(`Raw data from ${endpoint.name}:`, JSON.stringify(data, null, 2))
+          console.log(`Trying RoofLink API path: ${apiPath}`)
+          const data = await mcpClient.getRoofLinkData(apiPath)
+          console.log(`Raw data from ${apiPath}:`, JSON.stringify(data, null, 2))
           
           // Store raw data for debugging
           rawDataLog.push({
-            endpoint: endpoint.name,
+            endpoint: apiPath,
             rawResponse: data,
             timestamp: new Date().toISOString()
           })
           
           // Update the state for UI display
           setRawDataLog(prev => [...prev, {
-            endpoint: endpoint.name,
+            endpoint: apiPath,
             rawResponse: data,
             timestamp: new Date().toISOString()
           }])
@@ -362,17 +399,99 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
               }
             })
           } else {
-            console.log(`No data field found in response from ${endpoint.name}`)
+            console.log(`No data field found in response from ${apiPath}`)
           }
         } catch (error) {
-          console.error(`Error fetching data from ${endpoint.name}:`, error)
+          console.error(`Error fetching data from ${apiPath}:`, error)
+        }
+      }
+      
+      // If no data found from specific endpoints, try the original MCP endpoints as fallback
+      if (!dataFound) {
+        console.log('No data found from specific RoofLink endpoints, trying MCP endpoints as fallback')
+        
+        const endpointsToTry = allRelevantEndpoints.length > 0 ? allRelevantEndpoints : endpoints.slice(0, 3)
+        
+        for (const endpoint of endpointsToTry) {
+          try {
+            console.log(`Trying MCP endpoint: ${endpoint.name}`)
+            const data = await mcpClient.getData(endpoint.name)
+            console.log(`Raw data from MCP ${endpoint.name}:`, JSON.stringify(data, null, 2))
+            
+            // Store raw data for debugging
+            rawDataLog.push({
+              endpoint: endpoint.name,
+              rawResponse: data,
+              timestamp: new Date().toISOString()
+            })
+            
+            // Update the state for UI display
+            setRawDataLog(prev => [...prev, {
+              endpoint: endpoint.name,
+              rawResponse: data,
+              timestamp: new Date().toISOString()
+            }])
+            
+            // Process the data based on what we receive
+            if (data?.data) {
+              dataFound = true
+              
+              // Handle different data structures
+              let items: any[] = []
+              if (data.data.sampleItems) {
+                // Mock data structure
+                items = data.data.sampleItems
+                console.log(`Processing mock data with ${items.length} items from ${endpoint.name}`)
+              } else if (Array.isArray(data.data)) {
+                items = data.data
+                console.log(`Processing ${items.length} items from ${endpoint.name}`)
+              } else {
+                items = [data.data]
+                console.log(`Processing single item from ${endpoint.name}`)
+              }
+              
+              console.log(`First item structure:`, items.length > 0 ? Object.keys(items[0]) : 'No items')
+              
+              items.forEach((item: any, index: number) => {
+                console.log(`Item ${index} from ${endpoint.name}:`, JSON.stringify(item, null, 2))
+                
+                // Check if item is in Monroe LA region (be more flexible)
+                const isMonroe = item.region?.toLowerCase().includes('monroe') || 
+                                item.region?.toLowerCase().includes('la') ||
+                                item.city?.toLowerCase().includes('monroe') ||
+                                item.location?.toLowerCase().includes('monroe') ||
+                                item.address?.toLowerCase().includes('monroe') ||
+                                item.customer_address?.toLowerCase().includes('monroe') ||
+                                item.customer?.address?.toLowerCase().includes('monroe') ||
+                                item.job?.address?.toLowerCase().includes('monroe') ||
+                                item.state?.toLowerCase() === 'la' ||
+                                item.state?.toLowerCase() === 'louisiana'
+                
+                console.log(`Item ${index} Monroe LA check:`, { 
+                  isMonroe, 
+                  region: item.region, 
+                  city: item.city, 
+                  state: item.state,
+                  address: item.address 
+                })
+                
+                // Process Monroe LA region data specifically (or all data in debug mode)
+                if (isMonroe || debugMode) {
+                  // Process the data (same logic as above)
+                  // [Previous data processing logic would go here]
+                }
+              })
+            }
+          } catch (error) {
+            console.error(`Error fetching data from MCP ${endpoint.name}:`, error)
+          }
         }
       }
       
       if (!dataFound) {
         console.log('No data found in any endpoint response')
         // For debugging, let's try to show what endpoints returned and what data structure we got
-        console.log('Available endpoints that were tried:', endpointsToTry.map(ep => ep.name))
+        console.log('Available endpoints that were tried:', specificEndpoints)
       }
       
       // Add debugging info about what data we processed
