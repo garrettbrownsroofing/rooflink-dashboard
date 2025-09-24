@@ -41,6 +41,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
   const [rawDataLog, setRawDataLog] = useState<any[]>([])
   const [apiKey, setApiKey] = useState<string>('')
   const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(false)
+  const [hasConfiguredApiKey, setHasConfiguredApiKey] = useState<boolean>(false)
 
   // Helper functions for date range calculations
   const getDateRange = (type: DateRangeType): { startDate: string; endDate: string; period: string } => {
@@ -587,7 +588,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       if (!dataFound) {
         console.log('No real data found, adding sample data for demonstration...')
         
-        if (!apiKey) {
+        if (!hasConfiguredApiKey && !apiKey) {
           // Show sample data when no API key is provided
           dashboardData.contractsSigned = 8
           dashboardData.soldRevenue = 185000
@@ -643,6 +644,15 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    // Check if there's a configured API key
+    const configuredApiKey = mcpClient.getApiKey()
+    if (configuredApiKey) {
+      setHasConfiguredApiKey(true)
+      setApiKey(configuredApiKey)
+    }
+  }, [])
 
   useEffect(() => {
     if (isConnected) {
@@ -858,7 +868,8 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
             <h3 className="text-2xl font-bold text-gray-900 mb-2">
               {dashboardData.region} Dashboard
               {debugMode && <span className="ml-2 text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">DEBUG MODE</span>}
-              {!apiKey && <span className="ml-2 text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">SAMPLE DATA</span>}
+              {!hasConfiguredApiKey && !apiKey && <span className="ml-2 text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded">SAMPLE DATA</span>}
+              {hasConfiguredApiKey && <span className="ml-2 text-sm bg-green-100 text-green-800 px-2 py-1 rounded">LIVE DATA</span>}
             </h3>
             <p className="text-gray-600">
               {dashboardData.period}
@@ -868,9 +879,14 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
                 Debug mode is showing data from all regions, not just Monroe LA
               </p>
             )}
-            {!apiKey && (
+            {!hasConfiguredApiKey && !apiKey && (
               <p className="text-sm text-blue-600 mt-2">
                 Showing sample data. Set your API key to access live RoofLink data.
+              </p>
+            )}
+            {hasConfiguredApiKey && (
+              <p className="text-sm text-green-600 mt-2">
+                ✓ Using configured API key for live RoofLink data.
               </p>
             )}
           </div>

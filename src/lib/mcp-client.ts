@@ -2,6 +2,7 @@
 // Real implementation using the official MCP SDK
 
 // MCP Client for RoofLink - using direct HTTP calls to MCP server
+import { ROOFLINK_API_KEY } from '@/config/api'
 
 export interface MCPConnection {
   isConnected: boolean
@@ -26,6 +27,12 @@ class RoofLinkMCPClient {
   private connection: MCPConnection | null = null
   private serverUrl = 'https://developers.rooflink.com/mcp'
   private apiKey: string | null = null
+  
+  constructor() {
+    // Set the API key from configuration
+    this.apiKey = ROOFLINK_API_KEY
+    console.log('API key loaded from configuration')
+  }
 
   setApiKey(apiKey: string): void {
     this.apiKey = apiKey
