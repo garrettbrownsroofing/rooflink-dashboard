@@ -239,6 +239,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       
       let dataFound = false
       let rawDataLog: any[] = []
+      let endpointsToTry: MCPEndpoint[] = []
       
       // First try the specific RoofLink API endpoints
       for (const apiPath of specificEndpoints) {
@@ -410,7 +411,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       if (!dataFound) {
         console.log('No data found from specific RoofLink endpoints, trying MCP endpoints as fallback')
         
-        const endpointsToTry = allRelevantEndpoints.length > 0 ? allRelevantEndpoints : endpoints.slice(0, 3)
+        endpointsToTry = allRelevantEndpoints.length > 0 ? allRelevantEndpoints : endpoints.slice(0, 3)
         
         for (const endpoint of endpointsToTry) {
           try {
