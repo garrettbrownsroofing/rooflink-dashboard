@@ -120,6 +120,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       // Get available endpoints first
       const endpoints = await mcpClient.listAvailableEndpoints()
       console.log('Available endpoints:', endpoints)
+      console.log('Endpoint details:', endpoints.map(ep => ({ name: ep.name, description: ep.description, status: ep.status })))
       
       // Look for relevant endpoints for Monroe dashboard metrics
       // Be more flexible with endpoint matching
@@ -194,81 +195,119 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       // Try to fetch data from available endpoints
       const endpointsToTry = allRelevantEndpoints.length > 0 ? allRelevantEndpoints : endpoints.slice(0, 3)
       
+      console.log(`Will try ${endpointsToTry.length} endpoints:`, endpointsToTry.map(ep => ep.name))
+      
+      let dataFound = false
+      
       for (const endpoint of endpointsToTry) {
         try {
           console.log(`Trying endpoint: ${endpoint.name}`)
           const data = await mcpClient.getData(endpoint.name)
-          console.log(`Data from ${endpoint.name}:`, data)
+          console.log(`Raw data from ${endpoint.name}:`, JSON.stringify(data, null, 2))
           
           // Process the data based on what we receive
           if (data?.data) {
+            dataFound = true
             const items = Array.isArray(data.data) ? data.data : [data.data]
+            console.log(`Processing ${items.length} items from ${endpoint.name}`)
             
-            items.forEach((item: any) => {
-              // Check if item is in Monroe region
+            items.forEach((item: any, index: number) => {
+              console.log(`Item ${index} from ${endpoint.name}:`, JSON.stringify(item, null, 2))
+              
+              // Check if item is in Monroe region (be more flexible)
               const isMonroe = item.region?.toLowerCase().includes('monroe') || 
                               item.city?.toLowerCase().includes('monroe') ||
                               item.location?.toLowerCase().includes('monroe') ||
                               item.address?.toLowerCase().includes('monroe') ||
-                              item.customer_address?.toLowerCase().includes('monroe')
+                              item.customer_address?.toLowerCase().includes('monroe') ||
+                              item.customer?.address?.toLowerCase().includes('monroe') ||
+                              item.job?.address?.toLowerCase().includes('monroe')
               
-              if (isMonroe || !isMonroe) { // For now, process all data to see what we get
+              console.log(`Item ${index} Monroe check:`, { isMonroe, region: item.region, city: item.city, address: item.address })
+              
+              // Process all data for now to see what we get
+              if (true) { // Process all data regardless of Monroe filter for debugging
                 // Try to identify the type of data and process accordingly
                 
                 // Jobs/Contracts data
-                if (item.status || item.job_status || item.contract_status) {
-                  const status = item.status || item.job_status || item.contract_status
+                if (item.status || item.job_status || item.contract_status || item.job_status || item.work_status) {
+                  const status = item.status || item.job_status || item.contract_status || item.work_status
+                  console.log(`Processing job/contract item with status: ${status}`)
                   
                   // Contracts Signed (Jobs approved)
-                  if (status === 'approved' || item.approved === true || item.is_approved === true) {
+                  if (status === 'approved' || item.approved === true || item.is_approved === true || status === 'Approved') {
                     dashboardData.contractsSigned++
+                    console.log('Found approved contract/job')
                     
                     // Sold Revenue (Job approved with total of estimate)
-                    const revenue = item.estimate_total || item.total_amount || item.amount || item.revenue || 0
+                    const revenue = item.estimate_total || item.total_amount || item.amount || item.revenue || item.estimate_amount || item.job_amount || 0
                     if (revenue) {
                       dashboardData.soldRevenue += parseFloat(revenue.toString())
+                      console.log(`Added revenue: ${revenue}`)
                     }
                     
                     // Backlog (Jobs approved but not scheduled/deleted/completed/closed)
-                    if (!['scheduled', 'deleted', 'completed', 'closed'].includes(status)) {
+                    if (!['scheduled', 'deleted', 'completed', 'closed', 'Scheduled', 'Deleted', 'Completed', 'Closed'].includes(status)) {
                       dashboardData.backlog++
+                      console.log('Added to backlog')
                     }
                   }
                   
                   // Inspections (Jobs verified)
-                  if (item.verified === true || status === 'verified' || item.is_verified === true) {
+                  if (item.verified === true || status === 'verified' || item.is_verified === true || status === 'Verified') {
                     dashboardData.inspections++
+                    console.log('Found verified inspection')
                   }
                 }
                 
                 // Leads data
-                if (item.source || item.lead_source || item.lead_type) {
-                  const source = (item.source || item.lead_source || item.lead_type || '').toLowerCase()
+                if (item.source || item.lead_source || item.lead_type || item.leadSource || item.leadType) {
+                  const source = (item.source || item.lead_source || item.lead_type || item.leadSource || item.leadType || '').toLowerCase()
+                  console.log(`Processing lead with source: ${source}`)
                   
                   // Door Knocking Leads (Source contains "knocks" or "Rabbit")
-                  if (source.includes('knocks') || source.includes('rabbit')) {
+                  if (source.includes('knocks') || source.includes('rabbit') || source.includes('door') || source.includes('knock')) {
                     dashboardData.doorKnockingLeads++
+                    console.log('Found door knocking lead')
                   } else if (source) {
                     // Company Generated Leads (All other lead sources)
                     dashboardData.companyGeneratedLeads++
+                    console.log('Found company generated lead')
                   }
                 }
                 
                 // Claims data
-                if (item.claim_status || item.claim_id || item.insurance_claim) {
+                if (item.claim_status || item.claim_id || item.insurance_claim || item.claimStatus || item.claimId) {
                   dashboardData.claimsFiled++
+                  console.log('Found claim')
                   
-                  const claimStatus = item.claim_status || item.status
-                  if (claimStatus === 'approved' || item.approved === true) {
+                  const claimStatus = item.claim_status || item.status || item.claimStatus
+                  if (claimStatus === 'approved' || item.approved === true || claimStatus === 'Approved') {
                     dashboardData.claimsApproved++
+                    console.log('Found approved claim')
+                  }
+                }
+                
+                // Generic data processing - look for any numeric values that might be revenue
+                if (item.amount || item.total || item.value || item.price) {
+                  const amount = item.amount || item.total || item.value || item.price
+                  if (typeof amount === 'number' && amount > 0) {
+                    dashboardData.soldRevenue += amount
+                    console.log(`Added generic amount: ${amount}`)
                   }
                 }
               }
             })
+          } else {
+            console.log(`No data field found in response from ${endpoint.name}`)
           }
         } catch (error) {
           console.error(`Error fetching data from ${endpoint.name}:`, error)
         }
+      }
+      
+      if (!dataFound) {
+        console.log('No data found in any endpoint response')
       }
 
 
@@ -281,11 +320,16 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       console.log('Final dashboard data:', dashboardData)
       
       // If we got some data, show it even if it's not Monroe-specific
-      if (dashboardData.contractsSigned > 0 || dashboardData.soldRevenue > 0 || dashboardData.doorKnockingLeads > 0 || dashboardData.companyGeneratedLeads > 0) {
+      if (dashboardData.contractsSigned > 0 || dashboardData.soldRevenue > 0 || dashboardData.doorKnockingLeads > 0 || dashboardData.companyGeneratedLeads > 0 || dashboardData.inspections > 0 || dashboardData.claimsFiled > 0) {
+        setDashboardData(dashboardData)
+        setLastUpdated(new Date())
+      } else if (dataFound) {
+        // If we found data but couldn't process it, show empty dashboard with a note
+        console.log('Data was found but could not be processed into dashboard metrics')
         setDashboardData(dashboardData)
         setLastUpdated(new Date())
       } else {
-        throw new Error('No relevant data found in any of the available endpoints')
+        throw new Error('No data found in any of the available endpoints. Check browser console for detailed logs.')
       }
       
     } catch (error) {
