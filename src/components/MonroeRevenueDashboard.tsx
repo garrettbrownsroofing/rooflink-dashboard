@@ -123,33 +123,8 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       
       console.log('Revenue-related endpoints found:', revenueEndpoints)
       
-      // Generate mock data based on date range
-      const generateMockRevenue = (range: { startDate: string; endDate: string; period: string }) => {
-        const start = new Date(range.startDate)
-        const end = new Date(range.endDate)
-        const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
-        
-        // Base revenue per day for Monroe region
-        const baseDailyRevenue = 18000
-        const totalRevenue = baseDailyRevenue * daysDiff
-        
-        return {
-          region: 'Monroe, LA',
-          period: range.period,
-          soldRevenue: totalRevenue,
-          currency: 'USD',
-          timestamp: new Date().toISOString(),
-          startDate: range.startDate,
-          endDate: range.endDate
-        }
-      }
-      
       if (revenueEndpoints.length === 0) {
-        // Fallback: generate mock data based on date range
-        const mockData = generateMockRevenue(dateRange)
-        setRevenueData(mockData)
-        setLastUpdated(new Date())
-        return
+        throw new Error('No revenue-related endpoints found in RoofLink MCP server')
       }
 
       // Try to get data from the first available revenue endpoint
@@ -160,10 +135,14 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       console.log('Raw data received:', data)
       
       // Process the data to extract Monroe revenue with date range
+      if (!data?.data?.revenue && !data?.data?.amount) {
+        throw new Error('No revenue data found in API response')
+      }
+      
       const processedData: RevenueData = {
         region: 'Monroe, LA',
         period: dateRange.period,
-        soldRevenue: data?.data?.revenue || data?.data?.amount || generateMockRevenue(dateRange).soldRevenue,
+        soldRevenue: data?.data?.revenue || data?.data?.amount,
         currency: 'USD',
         timestamp: new Date().toISOString(),
         startDate: dateRange.startDate,
@@ -176,12 +155,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
     } catch (error) {
       console.error('Error fetching Monroe revenue:', error)
       setError(error instanceof Error ? error.message : 'Unknown error')
-      
-      // Set mock data on error for testing
-      const dateRange = getDateRange(dateRangeType)
-      const mockData = generateMockRevenue(dateRange)
-      setRevenueData(mockData)
-      setLastUpdated(new Date())
+      setRevenueData(null)
     } finally {
       setLoading(false)
     }
@@ -292,7 +266,10 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
           <p className="text-red-600 text-sm">
-            Error: {error} (Showing mock data for testing)
+            Error: {error}
+          </p>
+          <p className="text-red-500 text-xs mt-1">
+            Please ensure you're connected to the RoofLink MCP server and try again.
           </p>
         </div>
       )}
@@ -343,10 +320,29 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
             </div>
           )}
         </div>
+      ) : !loading ? (
+        <div className="text-center py-12">
+          <div className="text-gray-400 mb-4">
+            <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Revenue Data Available</h3>
+          <p className="text-gray-600 mb-4">
+            Connect to the RoofLink MCP server to fetch live revenue data for Monroe, LA region.
+          </p>
+          <button
+            onClick={fetchMonroeRevenue}
+            disabled={!isConnected}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isConnected ? 'Fetch Revenue Data' : 'Connect to MCP First'}
+          </button>
+        </div>
       ) : (
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading revenue data...</p>
+          <p className="text-gray-600">Loading revenue data from RoofLink...</p>
         </div>
       )}
 

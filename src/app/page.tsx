@@ -75,40 +75,6 @@ export default function Home() {
     }
   }
 
-  const testMonroeRevenue = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      
-      // First, let's try to get available endpoints to find revenue-related ones
-      const endpoints = await mcpClient.listAvailableEndpoints()
-      console.log('Available endpoints:', endpoints)
-      
-      // Look for revenue or payment related endpoints
-      const revenueEndpoints = endpoints.filter(ep => 
-        ep.name.toLowerCase().includes('revenue') || 
-        ep.name.toLowerCase().includes('payment') ||
-        ep.name.toLowerCase().includes('sold') ||
-        ep.name.toLowerCase().includes('analytics')
-      )
-      
-      console.log('Revenue-related endpoints:', revenueEndpoints)
-      
-      if (revenueEndpoints.length > 0) {
-        // Try the first revenue endpoint
-        const data = await mcpClient.getData(revenueEndpoints[0].name)
-        console.log('Revenue data:', data)
-        alert(`Found revenue data from ${revenueEndpoints[0].name}: ${JSON.stringify(data, null, 2)}`)
-      } else {
-        alert('No revenue-related endpoints found. Available endpoints: ' + endpoints.map(e => e.name).join(', '))
-      }
-    } catch (error) {
-      console.error('Error testing Monroe revenue:', error)
-      setError(error instanceof Error ? error.message : 'Unknown error')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
