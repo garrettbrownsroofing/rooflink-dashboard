@@ -270,19 +270,19 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
             if (data.data.sampleItems) {
               // Mock data structure
               items = data.data.sampleItems
-              console.log(`Processing mock data with ${items.length} items from ${endpoint.name}`)
+              console.log(`Processing mock data with ${items.length} items from ${apiPath}`)
             } else if (Array.isArray(data.data)) {
               items = data.data
-              console.log(`Processing ${items.length} items from ${endpoint.name}`)
+              console.log(`Processing ${items.length} items from ${apiPath}`)
             } else {
               items = [data.data]
-              console.log(`Processing single item from ${endpoint.name}`)
+              console.log(`Processing single item from ${apiPath}`)
             }
             
             console.log(`First item structure:`, items.length > 0 ? Object.keys(items[0]) : 'No items')
             
             items.forEach((item: any, index: number) => {
-              console.log(`Item ${index} from ${endpoint.name}:`, JSON.stringify(item, null, 2))
+              console.log(`Item ${index} from ${apiPath}:`, JSON.stringify(item, null, 2))
               
               // Check if item is in Monroe LA region (be more flexible)
               const isMonroe = item.region?.toLowerCase().includes('monroe') || 
