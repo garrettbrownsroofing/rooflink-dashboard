@@ -1,14 +1,12 @@
 // MCP Client for RoofLink
 // Real implementation using the official MCP SDK
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+// MCP Client for RoofLink - using direct HTTP calls to MCP server
 
 export interface MCPConnection {
   isConnected: boolean
   serverUrl: string
   lastConnected?: Date
-  client?: Client
 }
 
 export interface MCPData {
@@ -27,25 +25,12 @@ export interface MCPEndpoint {
 class RoofLinkMCPClient {
   private connection: MCPConnection | null = null
   private serverUrl = 'https://developers.rooflink.com/mcp'
-  private client: Client | null = null
 
   async connect(): Promise<boolean> {
     try {
       console.log('Connecting to RoofLink MCP server:', this.serverUrl)
       
-      // Create MCP client with proper configuration
-      this.client = new Client(
-        {
-          name: 'rooflink-dashboard',
-          version: '1.0.0'
-        },
-        {
-          capabilities: {
-            tools: {},
-            resources: {}
-          }
-        }
-      )
+      // Test connection to MCP server
 
       // Initialize the connection with the server
       const initResult = await fetch(this.serverUrl, {
@@ -81,8 +66,7 @@ class RoofLinkMCPClient {
       this.connection = {
         isConnected: true,
         serverUrl: this.serverUrl,
-        lastConnected: new Date(),
-        client: this.client
+        lastConnected: new Date()
       }
       
       console.log('Successfully connected to RoofLink MCP server')
@@ -94,16 +78,7 @@ class RoofLinkMCPClient {
   }
 
   async disconnect(): Promise<void> {
-    if (this.client) {
-      try {
-        await this.client.close()
-      } catch (error) {
-        console.error('Error closing MCP client:', error)
-      }
-    }
-    
     this.connection = null
-    this.client = null
     console.log('Disconnected from RoofLink MCP server')
   }
 
@@ -211,22 +186,42 @@ class RoofLinkMCPClient {
   }
 
   async getServerInfo(): Promise<any> {
-    if (!this.client) {
+    if (!this.connection?.isConnected) {
       throw new Error('Not connected to MCP server')
     }
 
     try {
-      return await this.client.initialize({
-        protocolVersion: '2024-11-05',
-        capabilities: {
-          tools: {},
-          resources: {}
+      // Get server info from the initialization response
+      const initResult = await fetch(this.serverUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream'
         },
-        clientInfo: {
-          name: 'rooflink-dashboard',
-          version: '1.0.0'
-        }
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'initialize',
+          params: {
+            protocolVersion: '2024-11-05',
+            capabilities: {
+              tools: {}
+            },
+            clientInfo: {
+              name: 'rooflink-dashboard',
+              version: '1.0.0'
+            }
+          },
+          id: 1
+        })
       })
+
+      if (!initResult.ok) {
+        throw new Error(`HTTP ${initResult.status}: ${initResult.statusText}`)
+      }
+
+      const initData = await initResult.text()
+      const parsed = JSON.parse(initData.split('\ndata: ')[1])
+      return parsed.result
     } catch (error) {
       console.error('Error getting server info:', error)
       return null
