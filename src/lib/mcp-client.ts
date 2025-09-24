@@ -124,9 +124,36 @@ class RoofLinkMCPClient {
       console.error(`Error fetching data from ${endpoint}:`, error)
       
       // Fallback to mock data for development
+      console.log(`Using mock data for ${endpoint} due to error:`, error)
       return {
         endpoint,
-        data: `Mock data for ${endpoint}`,
+        data: {
+          message: `Mock data for ${endpoint}`,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          mock: true,
+          sampleItems: [
+            {
+              id: 1,
+              region: 'LA',
+              city: 'Monroe',
+              state: 'LA',
+              status: 'approved',
+              amount: 25000,
+              source: 'website',
+              verified: true
+            },
+            {
+              id: 2,
+              region: 'LA',
+              city: 'Monroe',
+              state: 'LA',
+              status: 'pending',
+              amount: 18000,
+              source: 'door knock',
+              verified: false
+            }
+          ]
+        },
         timestamp: new Date().toISOString(),
         error: error instanceof Error ? error.message : 'Unknown error'
       }

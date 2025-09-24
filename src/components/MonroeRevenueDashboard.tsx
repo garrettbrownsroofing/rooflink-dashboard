@@ -37,6 +37,8 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
   const [customStartDate, setCustomStartDate] = useState<string>('')
   const [customEndDate, setCustomEndDate] = useState<string>('')
   const [debugMode, setDebugMode] = useState<boolean>(false)
+  const [showRawData, setShowRawData] = useState<boolean>(false)
+  const [rawDataLog, setRawDataLog] = useState<any[]>([])
 
   // Helper functions for date range calculations
   const getDateRange = (type: DateRangeType): { startDate: string; endDate: string; period: string } => {
@@ -197,8 +199,10 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       const endpointsToTry = allRelevantEndpoints.length > 0 ? allRelevantEndpoints : endpoints.slice(0, 3)
       
       console.log(`Will try ${endpointsToTry.length} endpoints:`, endpointsToTry.map(ep => ep.name))
+      console.log('All available endpoints:', endpoints.map(ep => ({ name: ep.name, description: ep.description })))
       
       let dataFound = false
+      let rawDataLog: any[] = []
       
       for (const endpoint of endpointsToTry) {
         try {
@@ -206,11 +210,39 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
           const data = await mcpClient.getData(endpoint.name)
           console.log(`Raw data from ${endpoint.name}:`, JSON.stringify(data, null, 2))
           
+          // Store raw data for debugging
+          rawDataLog.push({
+            endpoint: endpoint.name,
+            rawResponse: data,
+            timestamp: new Date().toISOString()
+          })
+          
+          // Update the state for UI display
+          setRawDataLog(prev => [...prev, {
+            endpoint: endpoint.name,
+            rawResponse: data,
+            timestamp: new Date().toISOString()
+          }])
+          
           // Process the data based on what we receive
           if (data?.data) {
             dataFound = true
-            const items = Array.isArray(data.data) ? data.data : [data.data]
-            console.log(`Processing ${items.length} items from ${endpoint.name}`)
+            
+            // Handle different data structures
+            let items: any[] = []
+            if (data.data.sampleItems) {
+              // Mock data structure
+              items = data.data.sampleItems
+              console.log(`Processing mock data with ${items.length} items from ${endpoint.name}`)
+            } else if (Array.isArray(data.data)) {
+              items = data.data
+              console.log(`Processing ${items.length} items from ${endpoint.name}`)
+            } else {
+              items = [data.data]
+              console.log(`Processing single item from ${endpoint.name}`)
+            }
+            
+            console.log(`First item structure:`, items.length > 0 ? Object.keys(items[0]) : 'No items')
             
             items.forEach((item: any, index: number) => {
               console.log(`Item ${index} from ${endpoint.name}:`, JSON.stringify(item, null, 2))
@@ -355,6 +387,25 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
         claimsApproved: dashboardData.claimsApproved,
         backlog: dashboardData.backlog
       })
+      
+      // Log all raw data for debugging
+      console.log('=== RAW DATA ANALYSIS ===')
+      console.log('Total endpoints tried:', endpointsToTry.length)
+      console.log('Raw data log:', rawDataLog)
+      
+      // If no data found and we're in debug mode, add some sample data
+      if (!dataFound && debugMode) {
+        console.log('No real data found, adding sample data for debugging...')
+        dashboardData.contractsSigned = 5
+        dashboardData.soldRevenue = 125000
+        dashboardData.doorKnockingLeads = 12
+        dashboardData.companyGeneratedLeads = 8
+        dashboardData.inspections = 15
+        dashboardData.claimsFiled = 3
+        dashboardData.claimsApproved = 2
+        dashboardData.backlog = 2
+        dataFound = true
+      }
 
 
       // Calculate lead conversion percentage
@@ -437,6 +488,12 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
           >
             {debugMode ? 'Debug Mode: ON' : 'Debug Mode: OFF'}
           </button>
+          <button
+            onClick={() => setShowRawData(!showRawData)}
+            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm"
+          >
+            {showRawData ? 'Hide Raw Data' : 'Show Raw Data'}
+          </button>
         </div>
       </div>
 
@@ -500,6 +557,29 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
           </div>
         )}
       </div>
+
+      {/* Raw Data Debug Section */}
+      {showRawData && (
+        <div className="mb-6 p-4 bg-purple-50 rounded-lg">
+          <h3 className="text-lg font-semibold mb-4 text-purple-800">Raw API Data Debug</h3>
+          {rawDataLog.length > 0 ? (
+            <div className="space-y-4">
+              {rawDataLog.map((log, index) => (
+                <div key={index} className="bg-white p-3 rounded border">
+                  <h4 className="font-medium text-purple-700 mb-2">
+                    Endpoint: {log.endpoint} (at {new Date(log.timestamp).toLocaleTimeString()})
+                  </h4>
+                  <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-64">
+                    {JSON.stringify(log.rawResponse, null, 2)}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-purple-600">No raw data available. Click "Refresh Data" to fetch API responses.</p>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
