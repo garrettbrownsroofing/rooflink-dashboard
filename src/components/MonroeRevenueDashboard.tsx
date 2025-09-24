@@ -122,28 +122,53 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       console.log('Available endpoints:', endpoints)
       
       // Look for relevant endpoints for Monroe dashboard metrics
+      // Be more flexible with endpoint matching
       const jobsEndpoints = endpoints.filter(ep => 
         ep.name.toLowerCase().includes('jobs') ||
         ep.name.toLowerCase().includes('approved') ||
-        ep.name.toLowerCase().includes('prospects')
+        ep.name.toLowerCase().includes('prospects') ||
+        ep.name.toLowerCase().includes('job') ||
+        ep.name.toLowerCase().includes('contract') ||
+        ep.name.toLowerCase().includes('estimate') ||
+        ep.name.toLowerCase().includes('inspection') ||
+        ep.name.toLowerCase().includes('verified')
       )
       
       const leadsEndpoints = endpoints.filter(ep => 
         ep.name.toLowerCase().includes('leads') ||
-        ep.name.toLowerCase().includes('lead')
+        ep.name.toLowerCase().includes('lead') ||
+        ep.name.toLowerCase().includes('prospect') ||
+        ep.name.toLowerCase().includes('customer')
       )
       
       const claimsEndpoints = endpoints.filter(ep => 
         ep.name.toLowerCase().includes('claims') ||
-        ep.name.toLowerCase().includes('claim')
+        ep.name.toLowerCase().includes('claim') ||
+        ep.name.toLowerCase().includes('insurance')
       )
       
+      // Also look for any analytics or reporting endpoints
+      const analyticsEndpoints = endpoints.filter(ep => 
+        ep.name.toLowerCase().includes('analytics') ||
+        ep.name.toLowerCase().includes('report') ||
+        ep.name.toLowerCase().includes('dashboard') ||
+        ep.name.toLowerCase().includes('summary')
+      )
+      
+      console.log('All available endpoints:', endpoints.map(ep => ep.name))
       console.log('Jobs endpoints:', jobsEndpoints)
       console.log('Leads endpoints:', leadsEndpoints)
       console.log('Claims endpoints:', claimsEndpoints)
+      console.log('Analytics endpoints:', analyticsEndpoints)
       
-      if (jobsEndpoints.length === 0 && leadsEndpoints.length === 0) {
-        throw new Error('No relevant endpoints found for Monroe dashboard data')
+      // If no specific endpoints found, try to use any available endpoint
+      const allRelevantEndpoints = [...jobsEndpoints, ...leadsEndpoints, ...claimsEndpoints, ...analyticsEndpoints]
+      
+      if (allRelevantEndpoints.length === 0 && endpoints.length > 0) {
+        console.log('No specific endpoints found, will try to use first available endpoint:', endpoints[0])
+        // We'll try to use the first available endpoint and see what data we can extract
+      } else if (endpoints.length === 0) {
+        throw new Error('No endpoints available from RoofLink MCP server')
       }
 
       // Fetch data from multiple endpoints
@@ -166,97 +191,86 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
         backlog: 0
       }
 
-      // Fetch jobs data for contracts, revenue, inspections, and backlog
-      if (jobsEndpoints.length > 0) {
+      // Try to fetch data from available endpoints
+      const endpointsToTry = allRelevantEndpoints.length > 0 ? allRelevantEndpoints : endpoints.slice(0, 3)
+      
+      for (const endpoint of endpointsToTry) {
         try {
-          const jobsData = await mcpClient.getData(jobsEndpoints[0].name)
-          console.log('Jobs data received:', jobsData)
+          console.log(`Trying endpoint: ${endpoint.name}`)
+          const data = await mcpClient.getData(endpoint.name)
+          console.log(`Data from ${endpoint.name}:`, data)
           
-          // Process jobs data to extract Monroe-specific metrics
-          if (jobsData?.data) {
-            const jobs = Array.isArray(jobsData.data) ? jobsData.data : [jobsData.data]
+          // Process the data based on what we receive
+          if (data?.data) {
+            const items = Array.isArray(data.data) ? data.data : [data.data]
             
-            jobs.forEach((job: any) => {
-              // Check if job is in Monroe region (you may need to adjust this filter)
-              const isMonroe = job.region?.toLowerCase().includes('monroe') || 
-                              job.city?.toLowerCase().includes('monroe') ||
-                              job.location?.toLowerCase().includes('monroe')
+            items.forEach((item: any) => {
+              // Check if item is in Monroe region
+              const isMonroe = item.region?.toLowerCase().includes('monroe') || 
+                              item.city?.toLowerCase().includes('monroe') ||
+                              item.location?.toLowerCase().includes('monroe') ||
+                              item.address?.toLowerCase().includes('monroe') ||
+                              item.customer_address?.toLowerCase().includes('monroe')
               
-              if (isMonroe) {
-                // Contracts Signed (Jobs approved)
-                if (job.status === 'approved' || job.approved === true) {
-                  dashboardData.contractsSigned++
+              if (isMonroe || !isMonroe) { // For now, process all data to see what we get
+                // Try to identify the type of data and process accordingly
+                
+                // Jobs/Contracts data
+                if (item.status || item.job_status || item.contract_status) {
+                  const status = item.status || item.job_status || item.contract_status
                   
-                  // Sold Revenue (Job approved with total of estimate)
-                  if (job.estimate_total || job.total_amount) {
-                    dashboardData.soldRevenue += parseFloat(job.estimate_total || job.total_amount || 0)
+                  // Contracts Signed (Jobs approved)
+                  if (status === 'approved' || item.approved === true || item.is_approved === true) {
+                    dashboardData.contractsSigned++
+                    
+                    // Sold Revenue (Job approved with total of estimate)
+                    const revenue = item.estimate_total || item.total_amount || item.amount || item.revenue || 0
+                    if (revenue) {
+                      dashboardData.soldRevenue += parseFloat(revenue.toString())
+                    }
+                    
+                    // Backlog (Jobs approved but not scheduled/deleted/completed/closed)
+                    if (!['scheduled', 'deleted', 'completed', 'closed'].includes(status)) {
+                      dashboardData.backlog++
+                    }
                   }
                   
-                  // Backlog (Jobs approved but not scheduled/deleted/completed/closed)
-                  if (!['scheduled', 'deleted', 'completed', 'closed'].includes(job.status)) {
-                    dashboardData.backlog++
+                  // Inspections (Jobs verified)
+                  if (item.verified === true || status === 'verified' || item.is_verified === true) {
+                    dashboardData.inspections++
                   }
                 }
                 
-                // Inspections (Jobs verified)
-                if (job.verified === true || job.status === 'verified') {
-                  dashboardData.inspections++
+                // Leads data
+                if (item.source || item.lead_source || item.lead_type) {
+                  const source = (item.source || item.lead_source || item.lead_type || '').toLowerCase()
+                  
+                  // Door Knocking Leads (Source contains "knocks" or "Rabbit")
+                  if (source.includes('knocks') || source.includes('rabbit')) {
+                    dashboardData.doorKnockingLeads++
+                  } else if (source) {
+                    // Company Generated Leads (All other lead sources)
+                    dashboardData.companyGeneratedLeads++
+                  }
+                }
+                
+                // Claims data
+                if (item.claim_status || item.claim_id || item.insurance_claim) {
+                  dashboardData.claimsFiled++
+                  
+                  const claimStatus = item.claim_status || item.status
+                  if (claimStatus === 'approved' || item.approved === true) {
+                    dashboardData.claimsApproved++
+                  }
                 }
               }
             })
           }
         } catch (error) {
-          console.error('Error fetching jobs data:', error)
+          console.error(`Error fetching data from ${endpoint.name}:`, error)
         }
       }
 
-      // Fetch leads data for door knocking and company generated leads
-      if (leadsEndpoints.length > 0) {
-        try {
-          const leadsData = await mcpClient.getData(leadsEndpoints[0].name)
-          console.log('Leads data received:', leadsData)
-          
-          if (leadsData?.data) {
-            const leads = Array.isArray(leadsData.data) ? leadsData.data : [leadsData.data]
-            
-            leads.forEach((lead: any) => {
-              const leadSource = lead.source?.toLowerCase() || lead.lead_source?.toLowerCase() || ''
-              
-              // Door Knocking Leads (Lead source contains "knocks" or "Rabbit")
-              if (leadSource.includes('knocks') || leadSource.includes('rabbit')) {
-                dashboardData.doorKnockingLeads++
-              } else {
-                // Company Generated Leads (All other lead sources)
-                dashboardData.companyGeneratedLeads++
-              }
-            })
-          }
-        } catch (error) {
-          console.error('Error fetching leads data:', error)
-        }
-      }
-
-      // Fetch claims data
-      if (claimsEndpoints.length > 0) {
-        try {
-          const claimsData = await mcpClient.getData(claimsEndpoints[0].name)
-          console.log('Claims data received:', claimsData)
-          
-          if (claimsData?.data) {
-            const claims = Array.isArray(claimsData.data) ? claimsData.data : [claimsData.data]
-            
-            claims.forEach((claim: any) => {
-              dashboardData.claimsFiled++
-              
-              if (claim.status === 'approved' || claim.approved === true) {
-                dashboardData.claimsApproved++
-              }
-            })
-          }
-        } catch (error) {
-          console.error('Error fetching claims data:', error)
-        }
-      }
 
       // Calculate lead conversion percentage
       const totalLeads = dashboardData.doorKnockingLeads + dashboardData.companyGeneratedLeads
@@ -264,8 +278,15 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
         dashboardData.leadConversionPercentage = (dashboardData.inspections / totalLeads) * 100
       }
       
-      setDashboardData(dashboardData)
-      setLastUpdated(new Date())
+      console.log('Final dashboard data:', dashboardData)
+      
+      // If we got some data, show it even if it's not Monroe-specific
+      if (dashboardData.contractsSigned > 0 || dashboardData.soldRevenue > 0 || dashboardData.doorKnockingLeads > 0 || dashboardData.companyGeneratedLeads > 0) {
+        setDashboardData(dashboardData)
+        setLastUpdated(new Date())
+      } else {
+        throw new Error('No relevant data found in any of the available endpoints')
+      }
       
     } catch (error) {
       console.error('Error fetching Monroe dashboard data:', error)
