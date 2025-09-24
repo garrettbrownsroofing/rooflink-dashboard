@@ -5,11 +5,15 @@ import { mcpClient } from '@/lib/mcp-client'
 
 interface RevenueData {
   region: string
-  week: string
+  period: string
   soldRevenue: number
   currency: string
   timestamp: string
+  startDate: string
+  endDate: string
 }
+
+type DateRangeType = 'current-week' | 'monthly' | 'yearly' | 'custom'
 
 interface MonroeRevenueDashboardProps {
   isConnected: boolean
@@ -20,6 +24,75 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [dateRangeType, setDateRangeType] = useState<DateRangeType>('current-week')
+  const [customStartDate, setCustomStartDate] = useState<string>('')
+  const [customEndDate, setCustomEndDate] = useState<string>('')
+
+  // Helper functions for date range calculations
+  const getDateRange = (type: DateRangeType): { startDate: string; endDate: string; period: string } => {
+    const now = new Date()
+    const today = now.toISOString().split('T')[0]
+    
+    switch (type) {
+      case 'current-week': {
+        const startOfWeek = new Date(now)
+        startOfWeek.setDate(now.getDate() - now.getDay()) // Start of current week (Sunday)
+        const endOfWeek = new Date(startOfWeek)
+        endOfWeek.setDate(startOfWeek.getDate() + 6) // End of current week (Saturday)
+        
+        return {
+          startDate: startOfWeek.toISOString().split('T')[0],
+          endDate: endOfWeek.toISOString().split('T')[0],
+          period: `Week of ${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+        }
+      }
+      
+      case 'monthly': {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+        
+        return {
+          startDate: startOfMonth.toISOString().split('T')[0],
+          endDate: endOfMonth.toISOString().split('T')[0],
+          period: now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+        }
+      }
+      
+      case 'yearly': {
+        const startOfYear = new Date(now.getFullYear(), 0, 1)
+        const endOfYear = new Date(now.getFullYear(), 11, 31)
+        
+        return {
+          startDate: startOfYear.toISOString().split('T')[0],
+          endDate: endOfYear.toISOString().split('T')[0],
+          period: now.getFullYear().toString()
+        }
+      }
+      
+      case 'custom': {
+        if (!customStartDate || !customEndDate) {
+          return {
+            startDate: today,
+            endDate: today,
+            period: 'Custom Range'
+          }
+        }
+        
+        return {
+          startDate: customStartDate,
+          endDate: customEndDate,
+          period: `Custom: ${new Date(customStartDate).toLocaleDateString()} - ${new Date(customEndDate).toLocaleDateString()}`
+        }
+      }
+      
+      default:
+        return {
+          startDate: today,
+          endDate: today,
+          period: 'Today'
+        }
+    }
+  }
 
   const fetchMonroeRevenue = async () => {
     if (!isConnected) {
@@ -30,6 +103,10 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
     try {
       setLoading(true)
       setError(null)
+      
+      // Get the current date range
+      const dateRange = getDateRange(dateRangeType)
+      console.log('Fetching revenue for date range:', dateRange)
       
       // Get available endpoints first
       const endpoints = await mcpClient.listAvailableEndpoints()
@@ -46,15 +123,30 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       
       console.log('Revenue-related endpoints found:', revenueEndpoints)
       
-      if (revenueEndpoints.length === 0) {
-        // Fallback: try to get any data and simulate Monroe revenue
-        const mockData: RevenueData = {
+      // Generate mock data based on date range
+      const generateMockRevenue = (range: { startDate: string; endDate: string; period: string }) => {
+        const start = new Date(range.startDate)
+        const end = new Date(range.endDate)
+        const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+        
+        // Base revenue per day for Monroe region
+        const baseDailyRevenue = 18000
+        const totalRevenue = baseDailyRevenue * daysDiff
+        
+        return {
           region: 'Monroe, LA',
-          week: new Date().toISOString().split('T')[0],
-          soldRevenue: 125000, // Mock data for testing
+          period: range.period,
+          soldRevenue: totalRevenue,
           currency: 'USD',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          startDate: range.startDate,
+          endDate: range.endDate
         }
+      }
+      
+      if (revenueEndpoints.length === 0) {
+        // Fallback: generate mock data based on date range
+        const mockData = generateMockRevenue(dateRange)
         setRevenueData(mockData)
         setLastUpdated(new Date())
         return
@@ -67,14 +159,15 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       const data = await mcpClient.getData(endpointName)
       console.log('Raw data received:', data)
       
-      // Process the data to extract Monroe revenue
-      // This is a placeholder - we'll need to adapt based on actual API response
+      // Process the data to extract Monroe revenue with date range
       const processedData: RevenueData = {
         region: 'Monroe, LA',
-        week: new Date().toISOString().split('T')[0],
-        soldRevenue: data?.data?.revenue || data?.data?.amount || 125000, // Fallback to mock
+        period: dateRange.period,
+        soldRevenue: data?.data?.revenue || data?.data?.amount || generateMockRevenue(dateRange).soldRevenue,
         currency: 'USD',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate
       }
       
       setRevenueData(processedData)
@@ -85,13 +178,8 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       setError(error instanceof Error ? error.message : 'Unknown error')
       
       // Set mock data on error for testing
-      const mockData: RevenueData = {
-        region: 'Monroe, LA',
-        week: new Date().toISOString().split('T')[0],
-        soldRevenue: 125000,
-        currency: 'USD',
-        timestamp: new Date().toISOString()
-      }
+      const dateRange = getDateRange(dateRangeType)
+      const mockData = generateMockRevenue(dateRange)
       setRevenueData(mockData)
       setLastUpdated(new Date())
     } finally {
@@ -103,7 +191,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
     if (isConnected) {
       fetchMonroeRevenue()
     }
-  }, [isConnected])
+  }, [isConnected, dateRangeType, customStartDate, customEndDate])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -129,7 +217,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Monroe LA Region</h2>
-          <p className="text-gray-600">Sold Revenue - This Week</p>
+          <p className="text-gray-600">Sold Revenue Dashboard</p>
         </div>
         <button
           onClick={fetchMonroeRevenue}
@@ -138,6 +226,67 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
         >
           {loading ? 'Refreshing...' : 'Refresh Data'}
         </button>
+      </div>
+
+      {/* Date Range Selector */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+        <h3 className="text-lg font-semibold mb-4">Select Date Range</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Date Range Type Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Time Period
+            </label>
+            <select
+              value={dateRangeType}
+              onChange={(e) => setDateRangeType(e.target.value as DateRangeType)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="current-week">Current Week</option>
+              <option value="monthly">This Month</option>
+              <option value="yearly">This Year</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+
+          {/* Custom Date Range Inputs */}
+          {dateRangeType === 'custom' && (
+            <div className="space-y-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Current Date Range Display */}
+        {revenueData && (
+          <div className="mt-4 p-3 bg-blue-50 rounded-md">
+            <p className="text-sm text-blue-800">
+              <span className="font-medium">Current Range:</span> {revenueData.startDate} to {revenueData.endDate}
+            </p>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -159,7 +308,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
               Sold Revenue for {revenueData.region}
             </p>
             <p className="text-sm text-gray-500">
-              Week of {revenueData.week}
+              {revenueData.period}
             </p>
           </div>
 
@@ -167,21 +316,21 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <div className="text-2xl font-semibold text-gray-900">
-                {formatCurrency(revenueData.soldRevenue / 7)}
+                {formatCurrency(revenueData.soldRevenue / Math.max(1, Math.ceil((new Date(revenueData.endDate).getTime() - new Date(revenueData.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1))}
               </div>
               <p className="text-sm text-gray-600">Daily Average</p>
             </div>
             
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <div className="text-2xl font-semibold text-gray-900">
-                {formatCurrency(revenueData.soldRevenue * 4)}
+                {formatCurrency(revenueData.soldRevenue / Math.max(1, Math.ceil((new Date(revenueData.endDate).getTime() - new Date(revenueData.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1) * 30)}
               </div>
               <p className="text-sm text-gray-600">Monthly Projection</p>
             </div>
             
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <div className="text-2xl font-semibold text-gray-900">
-                {formatCurrency(revenueData.soldRevenue * 52)}
+                {formatCurrency(revenueData.soldRevenue / Math.max(1, Math.ceil((new Date(revenueData.endDate).getTime() - new Date(revenueData.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1) * 365)}
               </div>
               <p className="text-sm text-gray-600">Annual Projection</p>
             </div>
