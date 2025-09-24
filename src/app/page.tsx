@@ -1,44 +1,77 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { mcpClient, MCPEndpoint } from '@/lib/mcp-client'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState('Disconnected')
-  const [data, setData] = useState<any>(null)
+  const [endpoints, setEndpoints] = useState<MCPEndpoint[]>([])
+  const [serverInfo, setServerInfo] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const connectToMCP = async () => {
     try {
+      setLoading(true)
+      setError(null)
       setConnectionStatus('Connecting...')
       
-      // This would be replaced with actual MCP client connection
-      // For now, we'll simulate the connection
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const connected = await mcpClient.connect()
       
-      setIsConnected(true)
-      setConnectionStatus('Connected to RoofLink MCP')
-      
-      // Simulate fetching some data
-      setData({
-        message: 'Connected to RoofLink MCP Server',
-        timestamp: new Date().toISOString(),
-        endpoints: [
-          { name: 'Payment Analytics', status: 'Available' },
-          { name: 'Job Reports', status: 'Available' },
-          { name: 'Estimates', status: 'Available' },
-          { name: 'Team Leaders', status: 'Available' }
-        ]
-      })
+      if (connected) {
+        setIsConnected(true)
+        setConnectionStatus('Connected to RoofLink MCP')
+        
+        // Get server info
+        const info = await mcpClient.getServerInfo()
+        setServerInfo(info)
+        
+        // Get available endpoints
+        const availableEndpoints = await mcpClient.listAvailableEndpoints()
+        setEndpoints(availableEndpoints)
+        
+        console.log('MCP connection successful:', { info, endpoints: availableEndpoints })
+      } else {
+        throw new Error('Failed to connect to MCP server')
+      }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       setConnectionStatus('Connection failed')
+      setError(errorMessage)
       console.error('MCP connection error:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const disconnectFromMCP = () => {
-    setIsConnected(false)
-    setConnectionStatus('Disconnected')
-    setData(null)
+  const disconnectFromMCP = async () => {
+    try {
+      await mcpClient.disconnect()
+      setIsConnected(false)
+      setConnectionStatus('Disconnected')
+      setEndpoints([])
+      setServerInfo(null)
+      setError(null)
+    } catch (error) {
+      console.error('Error disconnecting:', error)
+    }
+  }
+
+  const testEndpoint = async (endpointName: string) => {
+    try {
+      setLoading(true)
+      const data = await mcpClient.getData(endpointName)
+      console.log(`Data from ${endpointName}:`, data)
+      
+      // You could show this data in a modal or update the UI
+      alert(`Data from ${endpointName}: ${JSON.stringify(data, null, 2)}`)
+    } catch (error) {
+      console.error(`Error testing ${endpointName}:`, error)
+      alert(`Error testing ${endpointName}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -61,62 +94,92 @@ export default function Home() {
             <div className="flex items-center gap-3">
               <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
               <span className="text-gray-700">{connectionStatus}</span>
+              {loading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>}
             </div>
             <div className="flex gap-2">
               {!isConnected ? (
                 <button
                   onClick={connectToMCP}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  disabled={loading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >
-                  Connect to MCP
+                  {loading ? 'Connecting...' : 'Connect to MCP'}
                 </button>
               ) : (
                 <button
                   onClick={disconnectFromMCP}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                  disabled={loading}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
                 >
                   Disconnect
                 </button>
               )}
             </div>
           </div>
+          
+          {/* Error Display */}
+          {error && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          )}
         </div>
 
-        {/* Data Display */}
-        {data && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Connection Info */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold mb-4">Connection Info</h3>
-              <div className="space-y-2">
-                <p><strong>Message:</strong> {data.message}</p>
-                <p><strong>Connected:</strong> {new Date(data.timestamp).toLocaleString()}</p>
-              </div>
+        {/* Server Info */}
+        {serverInfo && (
+          <div className="bg-white rounded-lg shadow p-6 mb-8">
+            <h3 className="text-lg font-semibold mb-4">Server Information</h3>
+            <div className="bg-gray-50 rounded-md p-3">
+              <pre className="text-sm text-gray-800 overflow-x-auto">
+                {JSON.stringify(serverInfo, null, 2)}
+              </pre>
             </div>
+          </div>
+        )}
 
-            {/* Available Endpoints */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold mb-4">Available Endpoints</h3>
-              <div className="space-y-2">
-                {data.endpoints.map((endpoint: any, index: number) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                    <span className="font-medium">{endpoint.name}</span>
-                    <span className="text-sm text-green-600">{endpoint.status}</span>
+        {/* Available Endpoints */}
+        {endpoints.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6 mb-8">
+            <h3 className="text-lg font-semibold mb-4">Available Endpoints ({endpoints.length})</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {endpoints.map((endpoint, index) => (
+                <div key={index} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-gray-900">{endpoint.name}</h4>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      endpoint.status === 'available' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {endpoint.status}
+                    </span>
                   </div>
-                ))}
-              </div>
+                  {endpoint.description && (
+                    <p className="text-sm text-gray-600 mb-3">{endpoint.description}</p>
+                  )}
+                  <button
+                    onClick={() => testEndpoint(endpoint.name)}
+                    disabled={loading || endpoint.status !== 'available'}
+                    className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Testing...' : 'Test Endpoint'}
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
         {/* Next Steps */}
         <div className="bg-white rounded-lg shadow p-6 mt-8">
-          <h3 className="text-lg font-semibold mb-4">Next Steps</h3>
+          <h3 className="text-lg font-semibold mb-4">Development Status</h3>
           <div className="space-y-2 text-gray-700">
             <p>✅ Fresh project structure created</p>
-            <p>⏳ MCP client integration needed</p>
-            <p>⏳ Real data fetching implementation</p>
+            <p>✅ MCP client integration implemented</p>
+            <p>✅ Real data fetching framework ready</p>
             <p>⏳ Dashboard components development</p>
+            <p>⏳ Real MCP server connection testing</p>
+            <p>⏳ Authentication implementation</p>
           </div>
         </div>
       </div>
