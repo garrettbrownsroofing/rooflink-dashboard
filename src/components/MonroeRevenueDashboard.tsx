@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { mcpClient } from '@/lib/mcp-client'
+import { mcpClient, MCPEndpoint } from '@/lib/mcp-client'
 
 interface MonroeDashboardData {
   region: string
