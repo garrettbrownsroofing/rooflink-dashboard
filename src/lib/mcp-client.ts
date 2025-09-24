@@ -231,7 +231,7 @@ class RoofLinkMCPClient {
             arguments: {
               harRequest: {
                 method: 'get',
-                url: `https://integrate.rooflink.com/roof_link_endpoints/api/light${apiPath}`,
+                url: `https://integrate.rooflink.com/roof_link_endpoints/api${apiPath}`,
                 headers: headers
               }
             }
