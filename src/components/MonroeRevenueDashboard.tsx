@@ -3,14 +3,23 @@
 import { useState, useEffect } from 'react'
 import { mcpClient } from '@/lib/mcp-client'
 
-interface RevenueData {
+interface MonroeDashboardData {
   region: string
   period: string
-  soldRevenue: number
-  currency: string
-  timestamp: string
   startDate: string
   endDate: string
+  timestamp: string
+  
+  // Core Metrics
+  contractsSigned: number        // Jobs approved
+  soldRevenue: number           // Job approved with total of estimate
+  doorKnockingLeads: number     // Lead source contains "knocks" or "Rabbit"
+  companyGeneratedLeads: number // All lead sources except "knocks" or "Rabbit"
+  inspections: number           // Jobs verified
+  leadConversionPercentage: number // Inspections / (Company + Door Knock leads)
+  claimsFiled: number
+  claimsApproved: number
+  backlog: number              // Jobs approved but not scheduled/deleted/completed/closed
 }
 
 type DateRangeType = 'current-week' | 'monthly' | 'yearly' | 'custom'
@@ -20,7 +29,7 @@ interface MonroeRevenueDashboardProps {
 }
 
 export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDashboardProps) {
-  const [revenueData, setRevenueData] = useState<RevenueData | null>(null)
+  const [dashboardData, setDashboardData] = useState<MonroeDashboardData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -94,7 +103,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
     }
   }
 
-  const fetchMonroeRevenue = async () => {
+  const fetchMonroeDashboardData = async () => {
     if (!isConnected) {
       setError('Not connected to MCP server')
       return
@@ -106,56 +115,162 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       
       // Get the current date range
       const dateRange = getDateRange(dateRangeType)
-      console.log('Fetching revenue for date range:', dateRange)
+      console.log('Fetching Monroe dashboard data for date range:', dateRange)
       
       // Get available endpoints first
       const endpoints = await mcpClient.listAvailableEndpoints()
-      console.log('Available endpoints for revenue:', endpoints)
+      console.log('Available endpoints:', endpoints)
       
-      // Look for revenue, payment, or analytics endpoints
-      const revenueEndpoints = endpoints.filter(ep => 
-        ep.name.toLowerCase().includes('revenue') || 
-        ep.name.toLowerCase().includes('payment') ||
-        ep.name.toLowerCase().includes('sold') ||
-        ep.name.toLowerCase().includes('analytics') ||
-        ep.name.toLowerCase().includes('jobs')
+      // Look for relevant endpoints for Monroe dashboard metrics
+      const jobsEndpoints = endpoints.filter(ep => 
+        ep.name.toLowerCase().includes('jobs') ||
+        ep.name.toLowerCase().includes('approved') ||
+        ep.name.toLowerCase().includes('prospects')
       )
       
-      console.log('Revenue-related endpoints found:', revenueEndpoints)
+      const leadsEndpoints = endpoints.filter(ep => 
+        ep.name.toLowerCase().includes('leads') ||
+        ep.name.toLowerCase().includes('lead')
+      )
       
-      if (revenueEndpoints.length === 0) {
-        throw new Error('No revenue-related endpoints found in RoofLink MCP server')
+      const claimsEndpoints = endpoints.filter(ep => 
+        ep.name.toLowerCase().includes('claims') ||
+        ep.name.toLowerCase().includes('claim')
+      )
+      
+      console.log('Jobs endpoints:', jobsEndpoints)
+      console.log('Leads endpoints:', leadsEndpoints)
+      console.log('Claims endpoints:', claimsEndpoints)
+      
+      if (jobsEndpoints.length === 0 && leadsEndpoints.length === 0) {
+        throw new Error('No relevant endpoints found for Monroe dashboard data')
       }
 
-      // Try to get data from the first available revenue endpoint
-      const endpointName = revenueEndpoints[0].name
-      console.log(`Attempting to fetch data from: ${endpointName}`)
-      
-      const data = await mcpClient.getData(endpointName)
-      console.log('Raw data received:', data)
-      
-      // Process the data to extract Monroe revenue with date range
-      if (!data?.data?.revenue && !data?.data?.amount) {
-        throw new Error('No revenue data found in API response')
-      }
-      
-      const processedData: RevenueData = {
+      // Fetch data from multiple endpoints
+      const dashboardData: MonroeDashboardData = {
         region: 'Monroe, LA',
         period: dateRange.period,
-        soldRevenue: data?.data?.revenue || data?.data?.amount,
-        currency: 'USD',
-        timestamp: new Date().toISOString(),
         startDate: dateRange.startDate,
-        endDate: dateRange.endDate
+        endDate: dateRange.endDate,
+        timestamp: new Date().toISOString(),
+        
+        // Initialize all metrics to 0
+        contractsSigned: 0,
+        soldRevenue: 0,
+        doorKnockingLeads: 0,
+        companyGeneratedLeads: 0,
+        inspections: 0,
+        leadConversionPercentage: 0,
+        claimsFiled: 0,
+        claimsApproved: 0,
+        backlog: 0
+      }
+
+      // Fetch jobs data for contracts, revenue, inspections, and backlog
+      if (jobsEndpoints.length > 0) {
+        try {
+          const jobsData = await mcpClient.getData(jobsEndpoints[0].name)
+          console.log('Jobs data received:', jobsData)
+          
+          // Process jobs data to extract Monroe-specific metrics
+          if (jobsData?.data) {
+            const jobs = Array.isArray(jobsData.data) ? jobsData.data : [jobsData.data]
+            
+            jobs.forEach((job: any) => {
+              // Check if job is in Monroe region (you may need to adjust this filter)
+              const isMonroe = job.region?.toLowerCase().includes('monroe') || 
+                              job.city?.toLowerCase().includes('monroe') ||
+                              job.location?.toLowerCase().includes('monroe')
+              
+              if (isMonroe) {
+                // Contracts Signed (Jobs approved)
+                if (job.status === 'approved' || job.approved === true) {
+                  dashboardData.contractsSigned++
+                  
+                  // Sold Revenue (Job approved with total of estimate)
+                  if (job.estimate_total || job.total_amount) {
+                    dashboardData.soldRevenue += parseFloat(job.estimate_total || job.total_amount || 0)
+                  }
+                  
+                  // Backlog (Jobs approved but not scheduled/deleted/completed/closed)
+                  if (!['scheduled', 'deleted', 'completed', 'closed'].includes(job.status)) {
+                    dashboardData.backlog++
+                  }
+                }
+                
+                // Inspections (Jobs verified)
+                if (job.verified === true || job.status === 'verified') {
+                  dashboardData.inspections++
+                }
+              }
+            })
+          }
+        } catch (error) {
+          console.error('Error fetching jobs data:', error)
+        }
+      }
+
+      // Fetch leads data for door knocking and company generated leads
+      if (leadsEndpoints.length > 0) {
+        try {
+          const leadsData = await mcpClient.getData(leadsEndpoints[0].name)
+          console.log('Leads data received:', leadsData)
+          
+          if (leadsData?.data) {
+            const leads = Array.isArray(leadsData.data) ? leadsData.data : [leadsData.data]
+            
+            leads.forEach((lead: any) => {
+              const leadSource = lead.source?.toLowerCase() || lead.lead_source?.toLowerCase() || ''
+              
+              // Door Knocking Leads (Lead source contains "knocks" or "Rabbit")
+              if (leadSource.includes('knocks') || leadSource.includes('rabbit')) {
+                dashboardData.doorKnockingLeads++
+              } else {
+                // Company Generated Leads (All other lead sources)
+                dashboardData.companyGeneratedLeads++
+              }
+            })
+          }
+        } catch (error) {
+          console.error('Error fetching leads data:', error)
+        }
+      }
+
+      // Fetch claims data
+      if (claimsEndpoints.length > 0) {
+        try {
+          const claimsData = await mcpClient.getData(claimsEndpoints[0].name)
+          console.log('Claims data received:', claimsData)
+          
+          if (claimsData?.data) {
+            const claims = Array.isArray(claimsData.data) ? claimsData.data : [claimsData.data]
+            
+            claims.forEach((claim: any) => {
+              dashboardData.claimsFiled++
+              
+              if (claim.status === 'approved' || claim.approved === true) {
+                dashboardData.claimsApproved++
+              }
+            })
+          }
+        } catch (error) {
+          console.error('Error fetching claims data:', error)
+        }
+      }
+
+      // Calculate lead conversion percentage
+      const totalLeads = dashboardData.doorKnockingLeads + dashboardData.companyGeneratedLeads
+      if (totalLeads > 0) {
+        dashboardData.leadConversionPercentage = (dashboardData.inspections / totalLeads) * 100
       }
       
-      setRevenueData(processedData)
+      setDashboardData(dashboardData)
       setLastUpdated(new Date())
       
     } catch (error) {
-      console.error('Error fetching Monroe revenue:', error)
+      console.error('Error fetching Monroe dashboard data:', error)
       setError(error instanceof Error ? error.message : 'Unknown error')
-      setRevenueData(null)
+      setDashboardData(null)
     } finally {
       setLoading(false)
     }
@@ -163,7 +278,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
 
   useEffect(() => {
     if (isConnected) {
-      fetchMonroeRevenue()
+      fetchMonroeDashboardData()
     }
   }, [isConnected, dateRangeType, customStartDate, customEndDate])
 
@@ -191,10 +306,10 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Monroe LA Region</h2>
-          <p className="text-gray-600">Sold Revenue Dashboard</p>
+          <p className="text-gray-600">Comprehensive Business Dashboard</p>
         </div>
         <button
-          onClick={fetchMonroeRevenue}
+          onClick={fetchMonroeDashboardData}
           disabled={loading || !isConnected}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -254,10 +369,10 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
         </div>
 
         {/* Current Date Range Display */}
-        {revenueData && (
+        {dashboardData && (
           <div className="mt-4 p-3 bg-blue-50 rounded-md">
             <p className="text-sm text-blue-800">
-              <span className="font-medium">Current Range:</span> {revenueData.startDate} to {revenueData.endDate}
+              <span className="font-medium">Current Range:</span> {dashboardData.startDate} to {dashboardData.endDate}
             </p>
           </div>
         )}
@@ -274,42 +389,125 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
         </div>
       )}
 
-      {revenueData ? (
+      {dashboardData ? (
         <div className="space-y-6">
-          {/* Main Revenue Display */}
+          {/* Header */}
           <div className="text-center">
-            <div className="text-5xl font-bold text-green-600 mb-2">
-              {formatCurrency(revenueData.soldRevenue)}
-            </div>
-            <p className="text-gray-600 text-lg">
-              Sold Revenue for {revenueData.region}
-            </p>
-            <p className="text-sm text-gray-500">
-              {revenueData.period}
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">
+              {dashboardData.region} Dashboard
+            </h3>
+            <p className="text-gray-600">
+              {dashboardData.period}
             </p>
           </div>
 
-          {/* Additional Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <div className="text-2xl font-semibold text-gray-900">
-                {formatCurrency(revenueData.soldRevenue / Math.max(1, Math.ceil((new Date(revenueData.endDate).getTime() - new Date(revenueData.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1))}
-              </div>
-              <p className="text-sm text-gray-600">Daily Average</p>
-            </div>
+          {/* Core Metrics Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             
-            <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <div className="text-2xl font-semibold text-gray-900">
-                {formatCurrency(revenueData.soldRevenue / Math.max(1, Math.ceil((new Date(revenueData.endDate).getTime() - new Date(revenueData.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1) * 30)}
+            {/* Contracts Signed */}
+            <div className="bg-blue-50 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold text-blue-600 mb-2">
+                {dashboardData.contractsSigned}
               </div>
-              <p className="text-sm text-gray-600">Monthly Projection</p>
+              <p className="text-sm font-medium text-blue-800">Contracts Signed</p>
+              <p className="text-xs text-blue-600 mt-1">Jobs Approved</p>
             </div>
-            
-            <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <div className="text-2xl font-semibold text-gray-900">
-                {formatCurrency(revenueData.soldRevenue / Math.max(1, Math.ceil((new Date(revenueData.endDate).getTime() - new Date(revenueData.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1) * 365)}
+
+            {/* Sold Revenue */}
+            <div className="bg-green-50 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold text-green-600 mb-2">
+                {formatCurrency(dashboardData.soldRevenue)}
               </div>
-              <p className="text-sm text-gray-600">Annual Projection</p>
+              <p className="text-sm font-medium text-green-800">Sold Revenue</p>
+              <p className="text-xs text-green-600 mt-1">Job Approved with Estimate Total</p>
+            </div>
+
+            {/* Door Knocking Leads */}
+            <div className="bg-orange-50 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold text-orange-600 mb-2">
+                {dashboardData.doorKnockingLeads}
+              </div>
+              <p className="text-sm font-medium text-orange-800">Door Knocking Leads</p>
+              <p className="text-xs text-orange-600 mt-1">Source contains "knocks" or "Rabbit"</p>
+            </div>
+
+            {/* Company Generated Leads */}
+            <div className="bg-purple-50 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold text-purple-600 mb-2">
+                {dashboardData.companyGeneratedLeads}
+              </div>
+              <p className="text-sm font-medium text-purple-800">Company Generated Leads</p>
+              <p className="text-xs text-purple-600 mt-1">All other lead sources</p>
+            </div>
+
+            {/* Inspections */}
+            <div className="bg-indigo-50 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold text-indigo-600 mb-2">
+                {dashboardData.inspections}
+              </div>
+              <p className="text-sm font-medium text-indigo-800">Inspections</p>
+              <p className="text-xs text-indigo-600 mt-1">Jobs Verified</p>
+            </div>
+
+            {/* Lead Conversion Percentage */}
+            <div className="bg-teal-50 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold text-teal-600 mb-2">
+                {dashboardData.leadConversionPercentage.toFixed(1)}%
+              </div>
+              <p className="text-sm font-medium text-teal-800">Lead Conversion</p>
+              <p className="text-xs text-teal-600 mt-1">Inspections ÷ Total Leads</p>
+            </div>
+
+            {/* Claims Filed */}
+            <div className="bg-red-50 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold text-red-600 mb-2">
+                {dashboardData.claimsFiled}
+              </div>
+              <p className="text-sm font-medium text-red-800">Claims Filed</p>
+              <p className="text-xs text-red-600 mt-1">Total Claims</p>
+            </div>
+
+            {/* Claims Approved */}
+            <div className="bg-emerald-50 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold text-emerald-600 mb-2">
+                {dashboardData.claimsApproved}
+              </div>
+              <p className="text-sm font-medium text-emerald-800">Claims Approved</p>
+              <p className="text-xs text-emerald-600 mt-1">Approved Claims</p>
+            </div>
+
+            {/* Backlog */}
+            <div className="bg-yellow-50 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold text-yellow-600 mb-2">
+                {dashboardData.backlog}
+              </div>
+              <p className="text-sm font-medium text-yellow-800">Backlog</p>
+              <p className="text-xs text-yellow-600 mt-1">Approved but not scheduled/completed</p>
+            </div>
+
+          </div>
+
+          {/* Summary Stats */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {dashboardData.doorKnockingLeads + dashboardData.companyGeneratedLeads}
+                </div>
+                <p className="text-sm text-gray-600">Total Leads</p>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {dashboardData.claimsApproved > 0 ? ((dashboardData.claimsApproved / dashboardData.claimsFiled) * 100).toFixed(1) : 0}%
+                </div>
+                <p className="text-sm text-gray-600">Claims Approval Rate</p>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {formatCurrency(dashboardData.soldRevenue / Math.max(1, dashboardData.contractsSigned))}
+                </div>
+                <p className="text-sm text-gray-600">Avg Revenue per Contract</p>
+              </div>
             </div>
           </div>
 
@@ -327,22 +525,22 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Revenue Data Available</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Dashboard Data Available</h3>
           <p className="text-gray-600 mb-4">
-            Connect to the RoofLink MCP server to fetch live revenue data for Monroe, LA region.
+            Connect to the RoofLink MCP server to fetch live dashboard data for Monroe, LA region.
           </p>
           <button
-            onClick={fetchMonroeRevenue}
+            onClick={fetchMonroeDashboardData}
             disabled={!isConnected}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isConnected ? 'Fetch Revenue Data' : 'Connect to MCP First'}
+            {isConnected ? 'Fetch Dashboard Data' : 'Connect to MCP First'}
           </button>
         </div>
       ) : (
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading revenue data from RoofLink...</p>
+          <p className="text-gray-600">Loading dashboard data from RoofLink...</p>
         </div>
       )}
 
@@ -356,7 +554,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
             </span>
           </div>
           <span className="text-gray-500">
-            {revenueData ? 'Data Available' : 'No Data'}
+            {dashboardData ? 'Data Available' : 'No Data'}
           </span>
         </div>
       </div>
