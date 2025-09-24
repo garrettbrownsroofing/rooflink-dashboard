@@ -33,7 +33,7 @@ class RoofLinkMCPClient {
     try {
       console.log('Connecting to RoofLink MCP server:', this.serverUrl)
       
-      // Create MCP client
+      // Create MCP client with proper configuration
       this.client = new Client(
         {
           name: 'rooflink-dashboard',
@@ -47,9 +47,36 @@ class RoofLinkMCPClient {
         }
       )
 
-      // For now, we'll simulate the connection since we need to understand
-      // the specific transport method for the RoofLink MCP server
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Initialize the connection with the server
+      const initResult = await fetch(this.serverUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream'
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'initialize',
+          params: {
+            protocolVersion: '2024-11-05',
+            capabilities: {
+              tools: {}
+            },
+            clientInfo: {
+              name: 'rooflink-dashboard',
+              version: '1.0.0'
+            }
+          },
+          id: 1
+        })
+      })
+
+      if (!initResult.ok) {
+        throw new Error(`HTTP ${initResult.status}: ${initResult.statusText}`)
+      }
+
+      const initData = await initResult.text()
+      console.log('MCP server initialization response:', initData)
       
       this.connection = {
         isConnected: true,
@@ -81,23 +108,41 @@ class RoofLinkMCPClient {
   }
 
   async getData(endpoint: string): Promise<any> {
-    if (!this.connection?.isConnected || !this.client) {
+    if (!this.connection?.isConnected) {
       throw new Error('Not connected to MCP server')
     }
 
     try {
       console.log(`Fetching data from endpoint: ${endpoint}`)
       
-      // Try to call the MCP server for data
-      // The exact method depends on how RoofLink implements their MCP server
-      const result = await this.client.callTool({
-        name: endpoint,
-        arguments: {}
+      // Call the MCP server tool directly
+      const response = await fetch(this.serverUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream'
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'tools/call',
+          params: {
+            name: endpoint,
+            arguments: {}
+          },
+          id: Date.now()
+        })
       })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const responseData = await response.text()
+      const parsed = JSON.parse(responseData.split('\ndata: ')[1])
       
       return {
         endpoint,
-        data: result,
+        data: parsed.result,
         timestamp: new Date().toISOString()
       }
     } catch (error) {
@@ -114,31 +159,53 @@ class RoofLinkMCPClient {
   }
 
   async listAvailableEndpoints(): Promise<MCPEndpoint[]> {
-    if (!this.connection?.isConnected || !this.client) {
+    if (!this.connection?.isConnected) {
       throw new Error('Not connected to MCP server')
     }
 
     try {
-      // Get available tools from MCP server
-      const tools = await this.client.listTools()
+      // Get available tools from MCP server using direct HTTP call
+      const toolsResponse = await fetch(this.serverUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream'
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'tools/list',
+          params: {},
+          id: 2
+        })
+      })
+
+      if (!toolsResponse.ok) {
+        throw new Error(`HTTP ${toolsResponse.status}: ${toolsResponse.statusText}`)
+      }
+
+      const toolsData = await toolsResponse.text()
+      const parsed = JSON.parse(toolsData.split('\ndata: ')[1])
       
-      return tools.tools.map(tool => ({
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.inputSchema,
-        status: 'available' as const
-      }))
+      if (parsed.result && parsed.result.tools) {
+        return parsed.result.tools.map((tool: any) => ({
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.inputSchema,
+          status: 'available' as const
+        }))
+      }
+      
+      throw new Error('Invalid response format')
     } catch (error) {
       console.error('Error listing endpoints:', error)
       
-      // Fallback to known endpoints from our scroller pack
+      // Fallback to known MCP tools
       return [
-        { name: 'payment-analytics', description: 'Payment analytics data', status: 'available' },
-        { name: 'job-reports', description: 'Job reports and statistics', status: 'available' },
-        { name: 'estimates', description: 'Estimates data', status: 'available' },
-        { name: 'team-leaders', description: 'Team leaders information', status: 'available' },
-        { name: 'suppliers', description: 'Suppliers list', status: 'available' },
-        { name: 'invoices', description: 'Company invoices', status: 'available' }
+        { name: 'list-endpoints', description: 'Lists all API paths and their HTTP methods', status: 'available' },
+        { name: 'get-endpoint', description: 'Gets detailed information about a specific API endpoint', status: 'available' },
+        { name: 'execute-request', description: 'Executes an API request with given HAR', status: 'available' },
+        { name: 'search-specs', description: 'Searches paths, operations, and schemas', status: 'available' },
+        { name: 'get-code-snippet', description: 'Gets a code snippet for a specific API endpoint', status: 'available' }
       ]
     }
   }
