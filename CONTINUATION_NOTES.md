@@ -1,158 +1,112 @@
-# Continuation Notes for Next Chat Session
+# Monroe LA Dashboard Project - Continuation Notes
 
-## 🚀 Quick Start Guide
+## Current Status (September 24, 2025)
 
-### Current Status
-- ✅ **MCP Integration**: Fully working connection to RoofLink server
-- ✅ **Deployment**: Live on Vercel (auto-deploys from GitHub)
-- ✅ **Foundation**: Clean Next.js project ready for development
+### ✅ **Completed Work**
 
-### Immediate Next Steps
-1. **Test the live dashboard** at your Vercel deployment
-2. **Click "Connect to MCP"** to see the working connection
-3. **Explore available endpoints** (100+ RoofLink APIs discovered)
-4. **Build dashboard components** using real MCP data
+1. **Fixed Zero Data Issue**
+   - Identified root cause: Dashboard was calling metadata endpoints instead of actual data endpoints
+   - Updated MCP client to call specific RoofLink API endpoints:
+     - `/light/jobs/approved/` - For contracts and revenue data
+     - `/light/jobs/prospect/` - For prospect data  
+     - `/light/leads/` - For lead data
+     - `/light/customers/` - For customer data
+     - `/light/claims/` - For claims data
 
-## 🔧 Technical Context
+2. **Enhanced Debugging Tools**
+   - Added "Show Raw Data" button to inspect API responses
+   - Added comprehensive console logging for troubleshooting
+   - Added debug mode with sample data fallback
+   - Enhanced region filtering for Monroe LA data
 
-### What's Working
-- **MCP Server**: `https://developers.rooflink.com/mcp` (fully functional)
-- **Connection**: Direct HTTP calls to MCP server
-- **Data Access**: Real-time access to RoofLink APIs
-- **UI Framework**: Clean, responsive dashboard interface
+3. **Fixed All TypeScript Compilation Errors**
+   - Added missing MCPEndpoint import
+   - Fixed variable scope issues (endpointsToTry)
+   - Corrected all variable references (endpoint.name vs apiPath)
+   - Multiple commits to resolve build issues
 
-### Key Files
-- `src/lib/mcp-client.ts` - MCP connection logic
-- `src/app/page.tsx` - Main dashboard page
-- `PROJECT_PROGRESS_SUMMARY.md` - Complete project details
+### 🔧 **Key Files Modified**
 
-### MCP Tools Available
-1. `list-endpoints` - See all RoofLink API endpoints
-2. `get-endpoint` - Get detailed endpoint info
-3. `execute-request` - Execute actual API calls
-4. `search-specs` - Search API documentation
-5. `get-code-snippet` - Get code examples
-6. Plus 5 more tools for comprehensive API access
+- `src/components/MonroeRevenueDashboard.tsx` - Main dashboard component
+- `src/lib/mcp-client.ts` - MCP client with new RoofLink data method
 
-## 🎯 Development Focus
+### 🚀 **Deployment Status**
 
-### Priority 1: Dashboard Components
-- Build specific views for jobs, payments, estimates
-- Add data visualization (charts, tables, metrics)
-- Create responsive layouts for different data types
+- **Latest Commit:** `c7d3e40` - "Fix endpointsToTry variable scope issue"
+- **Repository:** https://github.com/garrettbrownsroofing/rooflink-dashboard
+- **Deployment:** Vercel (automatic from GitHub main branch)
+- **Build Status:** Should be deploying now with all TypeScript errors resolved
 
-### Priority 2: Real Data Integration
-- Use `execute-request` tool to call actual RoofLink APIs
-- Implement real-time data refresh
-- Add error handling for API failures
+### 🎯 **Next Steps for New Chat**
 
-### Priority 3: User Experience
-- Add authentication if needed
-- Implement filtering and search
-- Create intuitive navigation
+1. **Verify Deployment Success**
+   - Check if Vercel build completed successfully
+   - Test the live dashboard at Vercel URL
 
-## 📊 Available Data Sources
+2. **Test API Integration**
+   - Enable debug mode and "Show Raw Data"
+   - Verify RoofLink API endpoints are being called
+   - Check if real Monroe LA data is being returned
 
-### Major API Categories
-- **Jobs**: approved, prospects, map view, analytics, leaderboard
-- **Payments**: analytics, reports, settlements, webhooks
-- **Estimates**: templates, line items, contracts
-- **Work Orders**: performance, analytics, equipment
-- **Teams & Crews**: leaders, employees, permissions
-- **Documents & Photos**: templates, signed docs
-- **Inspections**: line items, reports
-- **Suppliers**: companies, products, insurance
+3. **Authentication Setup**
+   - The MCP client currently has placeholder token: `'Bearer YOUR_TOKEN_HERE'`
+   - Need to configure actual RoofLink API authentication
+   - May need to set up environment variables for API keys
 
-### Sample Endpoints
-- `/light/jobs/approved/` - Get approved jobs
-- `/light/payment-analytics/dashboard/` - Payment analytics
-- `/light/estimates/` - All estimates
-- `/light/team-leaders/` - Team leaders
-- `/light/workorder-analytics/` - Work order analytics
+4. **Data Processing Refinement**
+   - Based on actual API response structure, may need to adjust:
+     - Field name mapping (region, city, state, etc.)
+     - Data type handling
+     - Monroe LA region filtering logic
 
-## 🔄 Development Workflow
+### 📋 **Technical Details**
 
-### Testing
-```bash
-# Test MCP server directly
-curl -X POST https://developers.rooflink.com/mcp \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":1}'
+**Region Filtering Logic:**
+```typescript
+const isMonroe = item.region?.toLowerCase().includes('monroe') || 
+                item.region?.toLowerCase().includes('la') ||
+                item.city?.toLowerCase().includes('monroe') ||
+                item.location?.toLowerCase().includes('monroe') ||
+                item.address?.toLowerCase().includes('monroe') ||
+                item.customer_address?.toLowerCase().includes('monroe') ||
+                item.customer?.address?.toLowerCase().includes('monroe') ||
+                item.job?.address?.toLowerCase().includes('monroe') ||
+                item.state?.toLowerCase() === 'la' ||
+                item.state?.toLowerCase() === 'louisiana'
 ```
 
-### Git Workflow
-```bash
-git add .
-git commit -m "Description of changes"
-git push origin main
-# Auto-deploys to Vercel
-```
+**Dashboard Metrics:**
+- Contracts Signed (Jobs approved)
+- Sold Revenue (Job approved with estimate total)
+- Door Knocking Leads (Source contains "knocks" or "Rabbit")
+- Company Generated Leads (All other lead sources)
+- Inspections (Jobs verified)
+- Lead Conversion Percentage
+- Claims Filed
+- Claims Approved
+- Backlog (Approved but not scheduled/completed)
 
-### Key Commands
-- **Connect to MCP**: Click button in dashboard
-- **Test Endpoints**: Use "Test Endpoint" buttons
-- **View Data**: Check browser console for MCP responses
+### 🔍 **Debugging Tools Available**
 
-## 🎨 UI Framework
+1. **Debug Mode Toggle** - Shows data from all regions, not just Monroe LA
+2. **Show Raw Data Button** - Displays actual API responses
+3. **Console Logging** - Comprehensive logging of data processing
+4. **Sample Data Fallback** - Mock data when no real data is available
 
-### Current Setup
-- **Next.js 14** with App Router
-- **TypeScript** for type safety
-- **Tailwind CSS** for styling
-- **Responsive design** for all devices
+### ⚠️ **Known Issues**
 
-### Component Structure
-- Main page shows connection status
-- Endpoint cards with test buttons
-- Server info display
-- Error handling with retry options
+1. **API Authentication** - Need to configure real RoofLink API token
+2. **Data Structure** - May need to adjust field mapping based on actual API responses
+3. **Region Data** - Need to verify Monroe LA region data exists in RoofLink system
 
-## 🔐 Authentication Notes
+### 📞 **For New Chat Session**
 
-### Current Status
-- MCP server appears to work without authentication
-- May need auth tokens for actual API execution
-- Check `list-security-schemes` tool for auth requirements
+When continuing this project:
+1. Check current deployment status
+2. Test the live dashboard
+3. Review console logs and raw data output
+4. Configure proper API authentication
+5. Refine data processing based on actual API responses
 
-### If Auth Needed
-- Add auth token input to dashboard
-- Pass tokens to `execute-request` calls
-- Implement token management and refresh
-
-## 📈 Success Metrics
-
-### What We've Achieved
-✅ **Working MCP Connection**: Real-time access to RoofLink  
-✅ **100+ API Endpoints**: Comprehensive data coverage  
-✅ **Clean Architecture**: Maintainable, scalable codebase  
-✅ **Modern Stack**: Latest Next.js, React, TypeScript  
-✅ **Deployment Ready**: Automatic Vercel deployment  
-
-### Next Milestones
-🎯 **Dashboard Components**: User-facing data displays  
-🎯 **Real Data Visualization**: Charts, tables, metrics  
-🎯 **Live API Execution**: Actual RoofLink API calls  
-🎯 **User Authentication**: Secure access if needed  
-
-## 🚨 Important Notes
-
-### Don't Rebuild
-- MCP connection is working perfectly
-- Don't recreate the client or connection logic
-- Focus on building dashboard components
-
-### Leverage What's Working
-- Use the existing MCP client in `src/lib/mcp-client.ts`
-- Build on the current UI in `src/app/page.tsx`
-- Extend the endpoint discovery functionality
-
-### Key Success Factors
-- **Real Data**: MCP server provides live RoofLink data
-- **Clean Code**: Well-structured, typed, maintainable
-- **Modern Stack**: Latest technologies and best practices
-- **Deployment**: Automatic updates from GitHub
-
----
-
-**Ready to continue building dashboard components with real MCP data!** 🚀
+**Project Repository:** https://github.com/garrettbrownsroofing/rooflink-dashboard
+**Deployment:** Vercel (automatic from GitHub)
