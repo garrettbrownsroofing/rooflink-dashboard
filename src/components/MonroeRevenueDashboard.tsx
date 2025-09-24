@@ -36,6 +36,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
   const [dateRangeType, setDateRangeType] = useState<DateRangeType>('current-week')
   const [customStartDate, setCustomStartDate] = useState<string>('')
   const [customEndDate, setCustomEndDate] = useState<string>('')
+  const [debugMode, setDebugMode] = useState<boolean>(false)
 
   // Helper functions for date range calculations
   const getDateRange = (type: DateRangeType): { startDate: string; endDate: string; period: string } => {
@@ -174,7 +175,7 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
 
       // Fetch data from multiple endpoints
       const dashboardData: MonroeDashboardData = {
-        region: 'Monroe, LA',
+        region: 'Monroe LA',
         period: dateRange.period,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
@@ -214,75 +215,105 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
             items.forEach((item: any, index: number) => {
               console.log(`Item ${index} from ${endpoint.name}:`, JSON.stringify(item, null, 2))
               
-              // Check if item is in Monroe region (be more flexible)
+              // Check if item is in Monroe LA region (be more flexible)
               const isMonroe = item.region?.toLowerCase().includes('monroe') || 
+                              item.region?.toLowerCase().includes('la') ||
                               item.city?.toLowerCase().includes('monroe') ||
                               item.location?.toLowerCase().includes('monroe') ||
                               item.address?.toLowerCase().includes('monroe') ||
                               item.customer_address?.toLowerCase().includes('monroe') ||
                               item.customer?.address?.toLowerCase().includes('monroe') ||
-                              item.job?.address?.toLowerCase().includes('monroe')
+                              item.job?.address?.toLowerCase().includes('monroe') ||
+                              item.state?.toLowerCase() === 'la' ||
+                              item.state?.toLowerCase() === 'louisiana'
               
-              console.log(`Item ${index} Monroe check:`, { isMonroe, region: item.region, city: item.city, address: item.address })
+              console.log(`Item ${index} Monroe LA check:`, { 
+                isMonroe, 
+                region: item.region, 
+                city: item.city, 
+                state: item.state,
+                address: item.address 
+              })
               
-              // Process all data for now to see what we get
-              if (true) { // Process all data regardless of Monroe filter for debugging
+              // Process Monroe LA region data specifically (or all data in debug mode)
+              if (isMonroe || debugMode) {
                 // Try to identify the type of data and process accordingly
                 
-                // Jobs/Contracts data
-                if (item.status || item.job_status || item.contract_status || item.job_status || item.work_status) {
-                  const status = item.status || item.job_status || item.contract_status || item.work_status
-                  console.log(`Processing job/contract item with status: ${status}`)
+                // Jobs/Contracts data - be more flexible with field names
+                const status = item.status || item.job_status || item.contract_status || item.work_status || item.approval_status || item.stage
+                const approved = item.approved || item.is_approved || item.approval_status === 'approved' || status === 'approved' || status === 'Approved'
+                const verified = item.verified || item.is_verified || item.verification_status === 'verified' || status === 'verified' || status === 'Verified'
+                
+                if (status || approved || verified) {
+                  console.log(`Processing job/contract item:`, { 
+                    status, 
+                    approved, 
+                    verified, 
+                    id: item.id || item.job_id || item.contract_id 
+                  })
                   
                   // Contracts Signed (Jobs approved)
-                  if (status === 'approved' || item.approved === true || item.is_approved === true || status === 'Approved') {
+                  if (approved) {
                     dashboardData.contractsSigned++
                     console.log('Found approved contract/job')
                     
                     // Sold Revenue (Job approved with total of estimate)
-                    const revenue = item.estimate_total || item.total_amount || item.amount || item.revenue || item.estimate_amount || item.job_amount || 0
-                    if (revenue) {
+                    const revenue = item.estimate_total || item.total_amount || item.amount || item.revenue || 
+                                  item.estimate_amount || item.job_amount || item.contract_amount || 
+                                  item.total || item.value || item.price || 0
+                    if (revenue && parseFloat(revenue.toString()) > 0) {
                       dashboardData.soldRevenue += parseFloat(revenue.toString())
                       console.log(`Added revenue: ${revenue}`)
                     }
                     
                     // Backlog (Jobs approved but not scheduled/deleted/completed/closed)
-                    if (!['scheduled', 'deleted', 'completed', 'closed', 'Scheduled', 'Deleted', 'Completed', 'Closed'].includes(status)) {
+                    const finalStatus = status?.toLowerCase() || ''
+                    if (!['scheduled', 'deleted', 'completed', 'closed', 'finished', 'done'].includes(finalStatus)) {
                       dashboardData.backlog++
                       console.log('Added to backlog')
                     }
                   }
                   
                   // Inspections (Jobs verified)
-                  if (item.verified === true || status === 'verified' || item.is_verified === true || status === 'Verified') {
+                  if (verified) {
                     dashboardData.inspections++
                     console.log('Found verified inspection')
                   }
                 }
                 
-                // Leads data
-                if (item.source || item.lead_source || item.lead_type || item.leadSource || item.leadType) {
-                  const source = (item.source || item.lead_source || item.lead_type || item.leadSource || item.leadType || '').toLowerCase()
+                // Leads data - be more flexible with field names
+                const leadSource = item.source || item.lead_source || item.lead_type || item.leadSource || item.leadType || item.origin || item.lead_origin
+                if (leadSource || item.lead_id || item.prospect_id || item.customer_id) {
+                  const source = (leadSource || '').toLowerCase()
                   console.log(`Processing lead with source: ${source}`)
                   
                   // Door Knocking Leads (Source contains "knocks" or "Rabbit")
-                  if (source.includes('knocks') || source.includes('rabbit') || source.includes('door') || source.includes('knock')) {
+                  if (source.includes('knocks') || source.includes('rabbit') || source.includes('door') || 
+                      source.includes('knock') || source.includes('canvass') || source.includes('door-to-door')) {
                     dashboardData.doorKnockingLeads++
                     console.log('Found door knocking lead')
                   } else if (source) {
                     // Company Generated Leads (All other lead sources)
                     dashboardData.companyGeneratedLeads++
                     console.log('Found company generated lead')
+                  } else {
+                    // If no source specified but it's a lead record, count as company generated
+                    dashboardData.companyGeneratedLeads++
+                    console.log('Found lead with no specified source - counting as company generated')
                   }
                 }
                 
-                // Claims data
-                if (item.claim_status || item.claim_id || item.insurance_claim || item.claimStatus || item.claimId) {
+                // Claims data - be more flexible with field names
+                const claimId = item.claim_id || item.claimId || item.insurance_claim_id || item.claim_number
+                const claimStatus = item.claim_status || item.claimStatus || item.status || item.insurance_status
+                if (claimId || claimStatus || item.insurance_claim || item.claim_amount) {
                   dashboardData.claimsFiled++
-                  console.log('Found claim')
+                  console.log('Found claim:', { claimId, claimStatus })
                   
-                  const claimStatus = item.claim_status || item.status || item.claimStatus
-                  if (claimStatus === 'approved' || item.approved === true || claimStatus === 'Approved') {
+                  const isApproved = claimStatus === 'approved' || claimStatus === 'Approved' || 
+                                   item.approved === true || item.claim_approved === true ||
+                                   claimStatus === 'accepted' || claimStatus === 'Accepted'
+                  if (isApproved) {
                     dashboardData.claimsApproved++
                     console.log('Found approved claim')
                   }
@@ -308,7 +339,22 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       
       if (!dataFound) {
         console.log('No data found in any endpoint response')
+        // For debugging, let's try to show what endpoints returned and what data structure we got
+        console.log('Available endpoints that were tried:', endpointsToTry.map(ep => ep.name))
       }
+      
+      // Add debugging info about what data we processed
+      console.log('Monroe LA data processing summary:', {
+        totalItemsProcessed: dashboardData.contractsSigned + dashboardData.doorKnockingLeads + dashboardData.companyGeneratedLeads + dashboardData.claimsFiled,
+        contractsSigned: dashboardData.contractsSigned,
+        soldRevenue: dashboardData.soldRevenue,
+        doorKnockingLeads: dashboardData.doorKnockingLeads,
+        companyGeneratedLeads: dashboardData.companyGeneratedLeads,
+        inspections: dashboardData.inspections,
+        claimsFiled: dashboardData.claimsFiled,
+        claimsApproved: dashboardData.claimsApproved,
+        backlog: dashboardData.backlog
+      })
 
 
       // Calculate lead conversion percentage
@@ -371,15 +417,27 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Monroe LA Region</h2>
-          <p className="text-gray-600">Comprehensive Business Dashboard</p>
+          <p className="text-gray-600">RoofLink Regional Business Dashboard</p>
         </div>
-        <button
-          onClick={fetchMonroeDashboardData}
-          disabled={loading || !isConnected}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Refreshing...' : 'Refresh Data'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={fetchMonroeDashboardData}
+            disabled={loading || !isConnected}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Refreshing...' : 'Refresh Data'}
+          </button>
+          <button
+            onClick={() => setDebugMode(!debugMode)}
+            className={`px-4 py-2 rounded-md text-sm ${
+              debugMode 
+                ? 'bg-yellow-600 text-white hover:bg-yellow-700' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            {debugMode ? 'Debug Mode: ON' : 'Debug Mode: OFF'}
+          </button>
+        </div>
       </div>
 
       {/* Date Range Selector */}
@@ -460,10 +518,16 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
           <div className="text-center">
             <h3 className="text-2xl font-bold text-gray-900 mb-2">
               {dashboardData.region} Dashboard
+              {debugMode && <span className="ml-2 text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded">DEBUG MODE</span>}
             </h3>
             <p className="text-gray-600">
               {dashboardData.period}
             </p>
+            {debugMode && (
+              <p className="text-sm text-yellow-600 mt-2">
+                Debug mode is showing data from all regions, not just Monroe LA
+              </p>
+            )}
           </div>
 
           {/* Core Metrics Grid */}
