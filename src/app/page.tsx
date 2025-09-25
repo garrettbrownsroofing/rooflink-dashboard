@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { mcpClient, MCPEndpoint } from '@/lib/mcp-client'
 import MonroeRevenueDashboard from '@/components/MonroeRevenueDashboard'
 import ChatInterface from '@/components/ChatInterface'
+import DataExplorer from '@/components/DataExplorer'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
@@ -13,6 +14,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dashboardData, setDashboardData] = useState<any>(null)
+  const [showDataExplorer, setShowDataExplorer] = useState(false)
+  const [apiKey, setApiKey] = useState<string>('')
 
   const connectToMCP = async () => {
     try {
@@ -89,6 +92,28 @@ export default function Home() {
           <p className="text-gray-600">
             Powered by RoofLink MCP Server
           </p>
+        </div>
+
+        {/* API Key Input */}
+        <div className="bg-orange-50 rounded-lg shadow p-6 mb-8 border border-orange-200">
+          <h2 className="text-xl font-semibold mb-4 text-orange-800">API Configuration</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-orange-700 mb-2">
+                RoofLink API Key (Required for live data)
+              </label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Enter your RoofLink API key (X-API-KEY)"
+                className="w-full px-3 py-2 border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+              <p className="text-xs text-orange-600 mt-1">
+                This API key is required to access live data from RoofLink. Get your API key from the RoofLink developer portal.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Connection Status */}
@@ -176,6 +201,40 @@ export default function Home() {
 
         {/* Monroe Revenue Dashboard */}
         <MonroeRevenueDashboard isConnected={isConnected} onDataUpdate={setDashboardData} />
+
+        {/* Data Explorer Toggle */}
+        <div className="mt-8">
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">🔍 Complete Data Explorer</h3>
+                <p className="text-sm text-gray-600">Explore ALL available data from your RoofLink API</p>
+              </div>
+              <button
+                onClick={() => setShowDataExplorer(!showDataExplorer)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+              >
+                {showDataExplorer ? 'Hide Data Explorer' : 'Show Data Explorer'}
+              </button>
+            </div>
+            {!showDataExplorer && (
+              <div className="mt-4 p-4 bg-purple-50 rounded-lg">
+                <p className="text-sm text-purple-800">
+                  <strong>What this does:</strong> Fetches data from ALL available RoofLink API endpoints 
+                  so we can see exactly what information is available and how to properly display it. 
+                  This will help us understand the complete data structure and create better dashboards.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Data Explorer */}
+        {showDataExplorer && (
+          <div className="mb-8">
+            <DataExplorer isConnected={isConnected} apiKey={apiKey} />
+          </div>
+        )}
 
         {/* AI Chat Interface */}
         <div className="mt-8">
