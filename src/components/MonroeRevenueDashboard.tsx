@@ -17,9 +17,10 @@ type DateRangeType = 'current-week' | 'monthly' | 'yearly' | 'custom'
 
 interface MonroeRevenueDashboardProps {
   isConnected: boolean
+  onDataUpdate?: (data: MonroeDashboardMetrics | null) => void
 }
 
-export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDashboardProps) {
+export default function MonroeRevenueDashboard({ isConnected, onDataUpdate }: MonroeRevenueDashboardProps) {
   const [dashboardData, setDashboardData] = useState<MonroeDashboardMetrics | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -506,6 +507,13 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       fetchMonroeDashboardData()
     }
   }, [isConnected, dateRangeType, customStartDate, customEndDate])
+
+  // Update parent component with dashboard data
+  useEffect(() => {
+    if (onDataUpdate) {
+      onDataUpdate(dashboardData)
+    }
+  }, [dashboardData, onDataUpdate])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { mcpClient, MCPEndpoint } from '@/lib/mcp-client'
 import MonroeRevenueDashboard from '@/components/MonroeRevenueDashboard'
+import ChatInterface from '@/components/ChatInterface'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
@@ -11,6 +12,7 @@ export default function Home() {
   const [serverInfo, setServerInfo] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dashboardData, setDashboardData] = useState<any>(null)
 
   const connectToMCP = async () => {
     try {
@@ -173,18 +175,61 @@ export default function Home() {
         )}
 
         {/* Monroe Revenue Dashboard */}
-        <MonroeRevenueDashboard isConnected={isConnected} />
+        <MonroeRevenueDashboard isConnected={isConnected} onDataUpdate={setDashboardData} />
 
-        {/* Next Steps */}
+        {/* AI Chat Interface */}
+        <div className="mt-8">
+          <ChatInterface dashboardData={dashboardData} isConnected={isConnected} />
+        </div>
+
+        {/* Development Status */}
         <div className="bg-white rounded-lg shadow p-6 mt-8">
           <h3 className="text-lg font-semibold mb-4">Development Status</h3>
           <div className="space-y-2 text-gray-700">
             <p>✅ Fresh project structure created</p>
             <p>✅ MCP client integration implemented</p>
             <p>✅ Real data fetching framework ready</p>
-            <p>⏳ Dashboard components development</p>
+            <p>✅ Dashboard components with metrics display</p>
+            <p>✅ AI Chat Assistant with OpenAI integration</p>
+            <p>✅ Data processing and analysis utilities</p>
             <p>⏳ Real MCP server connection testing</p>
             <p>⏳ Authentication implementation</p>
+          </div>
+        </div>
+
+        {/* AI Assistant Info */}
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg shadow p-6 mt-8">
+          <h3 className="text-lg font-semibold mb-4 text-blue-800">🤖 AI Data Assistant</h3>
+          <div className="space-y-3 text-gray-700">
+            <p className="text-sm">
+              <strong>New Feature:</strong> Ask questions about your roofing business data using natural language!
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-medium text-blue-700 mb-2">Try asking:</p>
+                <ul className="space-y-1 text-xs">
+                  <li>• "How is my revenue performance?"</li>
+                  <li>• "What's my lead conversion rate?"</li>
+                  <li>• "Give me a business summary"</li>
+                  <li>• "What recommendations do you have?"</li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-medium text-purple-700 mb-2">AI Capabilities:</p>
+                <ul className="space-y-1 text-xs">
+                  <li>• Analyze dashboard metrics and trends</li>
+                  <li>• Provide business insights and recommendations</li>
+                  <li>• Answer questions about performance</li>
+                  <li>• Generate contextual reports</li>
+                </ul>
+              </div>
+            </div>
+            <div className="p-3 bg-blue-100 rounded-md">
+              <p className="text-xs text-blue-800">
+                <strong>Setup:</strong> To enable full AI features, add your OPENAI_API_KEY to environment variables. 
+                The assistant works with local analysis as a fallback.
+              </p>
+            </div>
           </div>
         </div>
       </div>
