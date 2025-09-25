@@ -106,7 +106,7 @@ export default function DataExplorer({ isConnected, apiKey }: DataExplorerProps)
       ]
 
       // Remove duplicates
-      const uniqueEndpoints = [...new Set(endpointsToTry)]
+      const uniqueEndpoints = Array.from(new Set(endpointsToTry))
       console.log(`Trying ${uniqueEndpoints.length} unique endpoints`)
 
       // Try each endpoint
