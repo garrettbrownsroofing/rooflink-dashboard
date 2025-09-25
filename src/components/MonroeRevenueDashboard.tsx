@@ -2,25 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { mcpClient, MCPEndpoint } from '@/lib/mcp-client'
-
-interface MonroeDashboardData {
-  region: string
-  period: string
-  startDate: string
-  endDate: string
-  timestamp: string
-  
-  // Core Metrics
-  contractsSigned: number        // Jobs approved
-  soldRevenue: number           // Job approved with total of estimate
-  doorKnockingLeads: number     // Lead source contains "knocks" or "Rabbit"
-  companyGeneratedLeads: number // All lead sources except "knocks" or "Rabbit"
-  inspections: number           // Jobs verified
-  leadConversionPercentage: number // Inspections / (Company + Door Knock leads)
-  claimsFiled: number
-  claimsApproved: number
-  backlog: number              // Jobs approved but not scheduled/deleted/completed/closed
-}
+import { 
+  MonroeDashboardMetrics, 
+  RoofLinkAPIResponse 
+} from '@/types/rooflink'
+import {
+  processRoofLinkResponse,
+  calculateLeadConversionPercentage,
+  createInitialDashboardMetrics
+} from '@/utils/rooflink-data-processor'
+import ApiDataVisualizer from './ApiDataVisualizer'
 
 type DateRangeType = 'current-week' | 'monthly' | 'yearly' | 'custom'
 
@@ -29,7 +20,7 @@ interface MonroeRevenueDashboardProps {
 }
 
 export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDashboardProps) {
-  const [dashboardData, setDashboardData] = useState<MonroeDashboardData | null>(null)
+  const [dashboardData, setDashboardData] = useState<MonroeDashboardMetrics | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -217,25 +208,13 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
         throw new Error('No endpoints available from RoofLink MCP server')
       }
 
-      // Fetch data from multiple endpoints
-      const dashboardData: MonroeDashboardData = {
-        region: 'Monroe LA',
-        period: dateRange.period,
-        startDate: dateRange.startDate,
-        endDate: dateRange.endDate,
-        timestamp: new Date().toISOString(),
-        
-        // Initialize all metrics to 0
-        contractsSigned: 0,
-        soldRevenue: 0,
-        doorKnockingLeads: 0,
-        companyGeneratedLeads: 0,
-        inspections: 0,
-        leadConversionPercentage: 0,
-        claimsFiled: 0,
-        claimsApproved: 0,
-        backlog: 0
-      }
+      // Initialize dashboard metrics
+      const dashboardMetrics = createInitialDashboardMetrics(
+        'Monroe LA',
+        dateRange.period,
+        dateRange.startDate,
+        dateRange.endDate
+      )
 
       // Try to fetch data from the specific RoofLink API endpoints we discovered
       const specificEndpoints = [
@@ -265,237 +244,28 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       for (const apiPath of specificEndpoints) {
         try {
           console.log(`Trying RoofLink API path: ${apiPath}`)
-          const data = await mcpClient.getRoofLinkData(apiPath)
-          console.log(`Raw data from ${apiPath}:`, JSON.stringify(data, null, 2))
+          const response = await mcpClient.getRoofLinkData(apiPath) as RoofLinkAPIResponse
+          console.log(`Raw data from ${apiPath}:`, JSON.stringify(response, null, 2))
           
           // Store raw data for debugging
           rawDataLog.push({
             endpoint: apiPath,
-            rawResponse: data,
+            rawResponse: response,
             timestamp: new Date().toISOString()
           })
           
           // Update the state for UI display
           setRawDataLog(prev => [...prev, {
             endpoint: apiPath,
-            rawResponse: data,
+            rawResponse: response,
             timestamp: new Date().toISOString()
           }])
           
-          // Process the data based on what we receive
-          if (data?.data) {
+          // Process the response using the new utility functions
+          const wasProcessed = processRoofLinkResponse(response, dashboardMetrics, debugMode)
+          if (wasProcessed) {
             dataFound = true
-            
-            // Handle different data structures
-            let items: any[] = []
-            
-            // Check if this is the RoofLink API response format with content array
-            if (data.data.content && Array.isArray(data.data.content)) {
-              console.log(`Processing RoofLink API response from ${apiPath}`)
-              
-              // Parse the JSON string from the content array
-              for (const contentItem of data.data.content) {
-                if (contentItem.type === 'text' && contentItem.text) {
-                  try {
-                    const parsedData = JSON.parse(contentItem.text)
-                    console.log(`Parsed data from ${apiPath}:`, parsedData)
-                    
-                    // Handle the paginated response structure
-                    if (parsedData.results && Array.isArray(parsedData.results)) {
-                      items = parsedData.results
-                      console.log(`Found ${items.length} results in paginated response`)
-                    } else if (Array.isArray(parsedData)) {
-                      items = parsedData
-                      console.log(`Found ${items.length} items in array response`)
-                    } else {
-                      items = [parsedData]
-                      console.log(`Found single item in response`)
-                    }
-                    break // Use the first text content item
-                  } catch (parseError) {
-                    console.error(`Error parsing JSON from ${apiPath}:`, parseError)
-                    console.log(`Raw text content:`, contentItem.text)
-                  }
-                }
-              }
-            } else if (data.data.sampleItems) {
-              // Mock data structure
-              items = data.data.sampleItems
-              console.log(`Processing mock data with ${items.length} items from ${apiPath}`)
-            } else if (Array.isArray(data.data)) {
-              items = data.data
-              console.log(`Processing ${items.length} items from ${apiPath}`)
-            } else {
-              items = [data.data]
-              console.log(`Processing single item from ${apiPath}`)
-            }
-            
-            console.log(`First item structure:`, items.length > 0 ? Object.keys(items[0]) : 'No items')
-            
-            items.forEach((item: any, index: number) => {
-              console.log(`Item ${index} from ${apiPath}:`, JSON.stringify(item, null, 2))
-              
-              // Check if item is in Monroe LA region (be more flexible)
-              const isMonroe = item.region?.name?.toLowerCase().includes('la') ||
-                              item.region?.toLowerCase().includes('monroe') || 
-                              item.region?.toLowerCase().includes('la') ||
-                              item.city?.toLowerCase().includes('monroe') ||
-                              item.location?.toLowerCase().includes('monroe') ||
-                              item.address?.toLowerCase().includes('monroe') ||
-                              item.full_address?.toLowerCase().includes('monroe') ||
-                              item.customer_address?.toLowerCase().includes('monroe') ||
-                              item.customer?.address?.toLowerCase().includes('monroe') ||
-                              item.job?.address?.toLowerCase().includes('monroe') ||
-                              item.state?.toLowerCase() === 'la' ||
-                              item.state?.toLowerCase() === 'louisiana' ||
-                              item.name?.toLowerCase().includes('monroe')
-              
-              console.log(`Item ${index} Monroe LA check:`, { 
-                isMonroe, 
-                region: item.region?.name || item.region, 
-                city: item.city, 
-                state: item.state,
-                address: item.full_address || item.address,
-                name: item.name
-              })
-              
-              // Process Monroe LA region data specifically (or all data in debug mode)
-              if (isMonroe || debugMode) {
-                // Process based on endpoint type
-                if (apiPath.includes('jobs/approved')) {
-                  // Process approved jobs data
-                  console.log(`Processing approved job:`, { 
-                    id: item.id,
-                    job_status: item.job_status?.label,
-                    date_approved: item.date_approved,
-                    date_closed: item.date_closed,
-                    region: item.region?.name
-                  })
-                  
-                  // All approved jobs count as contracts signed
-                  dashboardData.contractsSigned++
-                  console.log('Found approved job - counting as contract signed')
-                  
-                  // Check if job is closed (not in backlog)
-                  const isClosed = item.date_closed && item.job_status?.label?.toLowerCase() === 'closed'
-                  if (!isClosed) {
-                    dashboardData.backlog++
-                    console.log('Found approved job not yet closed - adding to backlog')
-                  }
-                  
-                  // Estimate revenue based on job type and region
-                  // Since we don't have actual estimate data in the light endpoint,
-                  // we'll use reasonable estimates based on job type
-                  let estimatedRevenue = 0
-                  if (item.job_type === 'c') { // Commercial
-                    estimatedRevenue = 25000 // Average commercial roof
-                  } else if (item.job_type === 'r') { // Residential
-                    estimatedRevenue = 15000 // Average residential roof
-                  } else {
-                    estimatedRevenue = 20000 // Default estimate
-                  }
-                  
-                  // Adjust based on region (LA region might have different pricing)
-                  if (item.region?.name?.toLowerCase().includes('la')) {
-                    estimatedRevenue = Math.round(estimatedRevenue * 1.1) // 10% higher for LA
-                  }
-                  
-                  dashboardData.soldRevenue += estimatedRevenue
-                  console.log(`Added estimated revenue: ${estimatedRevenue} for job type: ${item.job_type}`)
-                  
-                } else if (apiPath.includes('jobs/prospect')) {
-                  // Process prospect jobs data
-                  console.log(`Processing prospect job:`, { 
-                    id: item.id,
-                    job_type: item.job_type,
-                    lead_source: item.lead_source?.name,
-                    region: item.region?.name,
-                    pipeline: item.pipeline
-                  })
-                  
-                  // Check lead source for door knocking vs company generated
-                  const leadSource = item.lead_source?.name?.toLowerCase() || ''
-                  if (leadSource.includes('door') || leadSource.includes('knock') || leadSource.includes('rabbit') || leadSource.includes('canvass')) {
-                    dashboardData.doorKnockingLeads++
-                    console.log('Found door knocking lead from prospect job')
-                  } else if (leadSource) {
-                    dashboardData.companyGeneratedLeads++
-                    console.log('Found company generated lead from prospect job')
-                  } else {
-                    // If no lead source specified, count as company generated
-                    dashboardData.companyGeneratedLeads++
-                    console.log('Found prospect with no lead source - counting as company generated')
-                  }
-                  
-                  // Check if lead is verified (inspection completed)
-                  const isVerified = item.pipeline?.verify_lead?.complete === true
-                  if (isVerified) {
-                    dashboardData.inspections++
-                    console.log('Found verified lead - counting as inspection')
-                  }
-                  
-                } else if (apiPath.includes('customers')) {
-                  // Process customer data
-                  console.log(`Processing customer:`, { 
-                    id: item.id,
-                    name: item.name,
-                    region: item.region?.name,
-                    rep: item.rep?.name
-                  })
-                  
-                  // Customers don't directly contribute to most metrics
-                  // They're more for reference/context
-                  
-                } else if (apiPath.includes('leads')) {
-                  // Process leads data (if available)
-                  console.log(`Processing lead:`, { 
-                    id: item.id,
-                    source: item.source,
-                    status: item.status,
-                    region: item.region
-                  })
-                  
-                  // Process lead source
-                  const leadSource = (item.source || '').toLowerCase()
-                  if (leadSource.includes('door') || leadSource.includes('knock') || leadSource.includes('rabbit') || leadSource.includes('canvass')) {
-                    dashboardData.doorKnockingLeads++
-                    console.log('Found door knocking lead')
-                  } else if (leadSource) {
-                    dashboardData.companyGeneratedLeads++
-                    console.log('Found company generated lead')
-                  } else {
-                    dashboardData.companyGeneratedLeads++
-                    console.log('Found lead with no specified source - counting as company generated')
-                  }
-                  
-                  // Check if verified
-                  if (item.verified || item.status === 'verified') {
-                    dashboardData.inspections++
-                    console.log('Found verified lead - counting as inspection')
-                  }
-                  
-                } else if (apiPath.includes('claims')) {
-                  // Process claims data (if available)
-                  console.log(`Processing claim:`, { 
-                    id: item.id,
-                    status: item.status,
-                    amount: item.amount,
-                    region: item.region
-                  })
-                  
-                  dashboardData.claimsFiled++
-                  console.log('Found claim')
-                  
-                  const isApproved = item.status === 'approved' || item.approved === true
-                  if (isApproved) {
-                    dashboardData.claimsApproved++
-                    console.log('Found approved claim')
-                  }
-                }
-              }
-            })
-          } else {
-            console.log(`No data field found in response from ${apiPath}`)
+            console.log(`Successfully processed data from ${apiPath}`)
           }
         } catch (error) {
           console.error(`Error fetching data from ${apiPath}:`, error)
@@ -641,17 +411,25 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
         }
       }
       
+      // Calculate lead conversion percentage
+      dashboardMetrics.leadConversionPercentage = calculateLeadConversionPercentage(
+        dashboardMetrics.inspections,
+        dashboardMetrics.doorKnockingLeads,
+        dashboardMetrics.companyGeneratedLeads
+      )
+
       // Add debugging info about what data we processed
       console.log('Monroe LA data processing summary:', {
-        totalItemsProcessed: dashboardData.contractsSigned + dashboardData.doorKnockingLeads + dashboardData.companyGeneratedLeads + dashboardData.claimsFiled,
-        contractsSigned: dashboardData.contractsSigned,
-        soldRevenue: dashboardData.soldRevenue,
-        doorKnockingLeads: dashboardData.doorKnockingLeads,
-        companyGeneratedLeads: dashboardData.companyGeneratedLeads,
-        inspections: dashboardData.inspections,
-        claimsFiled: dashboardData.claimsFiled,
-        claimsApproved: dashboardData.claimsApproved,
-        backlog: dashboardData.backlog
+        totalItemsProcessed: dashboardMetrics.contractsSigned + dashboardMetrics.doorKnockingLeads + dashboardMetrics.companyGeneratedLeads + dashboardMetrics.claimsFiled,
+        contractsSigned: dashboardMetrics.contractsSigned,
+        soldRevenue: dashboardMetrics.soldRevenue,
+        doorKnockingLeads: dashboardMetrics.doorKnockingLeads,
+        companyGeneratedLeads: dashboardMetrics.companyGeneratedLeads,
+        inspections: dashboardMetrics.inspections,
+        claimsFiled: dashboardMetrics.claimsFiled,
+        claimsApproved: dashboardMetrics.claimsApproved,
+        backlog: dashboardMetrics.backlog,
+        leadConversionPercentage: dashboardMetrics.leadConversionPercentage
       })
       
       // Log all raw data for debugging
@@ -665,24 +443,24 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
         
         if (!hasConfiguredApiKey && !apiKey) {
           // Show sample data when no API key is provided
-          dashboardData.contractsSigned = 8
-          dashboardData.soldRevenue = 185000
-          dashboardData.doorKnockingLeads = 15
-          dashboardData.companyGeneratedLeads = 12
-          dashboardData.inspections = 20
-          dashboardData.claimsFiled = 4
-          dashboardData.claimsApproved = 3
-          dashboardData.backlog = 3
+          dashboardMetrics.contractsSigned = 8
+          dashboardMetrics.soldRevenue = 185000
+          dashboardMetrics.doorKnockingLeads = 15
+          dashboardMetrics.companyGeneratedLeads = 12
+          dashboardMetrics.inspections = 20
+          dashboardMetrics.claimsFiled = 4
+          dashboardMetrics.claimsApproved = 3
+          dashboardMetrics.backlog = 3
         } else if (debugMode) {
           // Show debug data when in debug mode
-          dashboardData.contractsSigned = 5
-          dashboardData.soldRevenue = 125000
-          dashboardData.doorKnockingLeads = 12
-          dashboardData.companyGeneratedLeads = 8
-          dashboardData.inspections = 15
-          dashboardData.claimsFiled = 3
-          dashboardData.claimsApproved = 2
-          dashboardData.backlog = 2
+          dashboardMetrics.contractsSigned = 5
+          dashboardMetrics.soldRevenue = 125000
+          dashboardMetrics.doorKnockingLeads = 12
+          dashboardMetrics.companyGeneratedLeads = 8
+          dashboardMetrics.inspections = 15
+          dashboardMetrics.claimsFiled = 3
+          dashboardMetrics.claimsApproved = 2
+          dashboardMetrics.backlog = 2
         }
         
         dataFound = true
@@ -690,22 +468,16 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       }
 
 
-      // Calculate lead conversion percentage
-      const totalLeads = dashboardData.doorKnockingLeads + dashboardData.companyGeneratedLeads
-      if (totalLeads > 0) {
-        dashboardData.leadConversionPercentage = (dashboardData.inspections / totalLeads) * 100
-      }
-      
-      console.log('Final dashboard data:', dashboardData)
+      console.log('Final dashboard data:', dashboardMetrics)
       
       // If we got some data, show it even if it's not Monroe-specific
-      if (dashboardData.contractsSigned > 0 || dashboardData.soldRevenue > 0 || dashboardData.doorKnockingLeads > 0 || dashboardData.companyGeneratedLeads > 0 || dashboardData.inspections > 0 || dashboardData.claimsFiled > 0) {
-        setDashboardData(dashboardData)
+      if (dashboardMetrics.contractsSigned > 0 || dashboardMetrics.soldRevenue > 0 || dashboardMetrics.doorKnockingLeads > 0 || dashboardMetrics.companyGeneratedLeads > 0 || dashboardMetrics.inspections > 0 || dashboardMetrics.claimsFiled > 0) {
+        setDashboardData(dashboardMetrics)
         setLastUpdated(new Date())
       } else if (dataFound) {
         // If we found data but couldn't process it, show empty dashboard with a note
         console.log('Data was found but could not be processed into dashboard metrics')
-        setDashboardData(dashboardData)
+        setDashboardData(dashboardMetrics)
         setLastUpdated(new Date())
       } else {
         throw new Error('No data found in any of the available endpoints. Check browser console for detailed logs.')
@@ -905,23 +677,8 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
       {/* Raw Data Debug Section */}
       {showRawData && (
         <div className="mb-6 p-4 bg-purple-50 rounded-lg">
-          <h3 className="text-lg font-semibold mb-4 text-purple-800">Raw API Data Debug</h3>
-          {rawDataLog.length > 0 ? (
-            <div className="space-y-4">
-              {rawDataLog.map((log, index) => (
-                <div key={index} className="bg-white p-3 rounded border">
-                  <h4 className="font-medium text-purple-700 mb-2">
-                    Endpoint: {log.endpoint} (at {new Date(log.timestamp).toLocaleTimeString()})
-                  </h4>
-                  <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-64">
-                    {JSON.stringify(log.rawResponse, null, 2)}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-purple-600">No raw data available. Click "Refresh Data" to fetch API responses.</p>
-          )}
+          <h3 className="text-lg font-semibold mb-4 text-purple-800">API Data Analysis & Debug</h3>
+          <ApiDataVisualizer rawDataLog={rawDataLog} />
         </div>
       )}
 
@@ -1073,6 +830,39 @@ export default function MonroeRevenueDashboard({ isConnected }: MonroeRevenueDas
                 </div>
                 <p className="text-sm text-gray-600">Avg Revenue per Contract</p>
               </div>
+            </div>
+          </div>
+
+          {/* Data Processing Summary */}
+          <div className="bg-blue-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-blue-800 mb-3">Data Processing Summary</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="font-medium text-blue-700">Total API Responses:</span>
+                <span className="ml-2 text-blue-900">{rawDataLog.length}</span>
+              </div>
+              <div>
+                <span className="font-medium text-blue-700">Successful Endpoints:</span>
+                <span className="ml-2 text-blue-900">
+                  {rawDataLog.filter(log => {
+                    const response = log.rawResponse
+                    return response.data?.content || response.data?.sampleItems
+                  }).length}
+                </span>
+              </div>
+              <div>
+                <span className="font-medium text-blue-700">Approved Jobs Processed:</span>
+                <span className="ml-2 text-blue-900">{dashboardData.contractsSigned}</span>
+              </div>
+              <div>
+                <span className="font-medium text-blue-700">Prospect Jobs Processed:</span>
+                <span className="ml-2 text-blue-900">{dashboardData.doorKnockingLeads + dashboardData.companyGeneratedLeads}</span>
+              </div>
+            </div>
+            <div className="mt-3 p-3 bg-blue-100 rounded text-xs text-blue-800">
+              <strong>Note:</strong> This dashboard processes data from RoofLink API endpoints including approved jobs, 
+              prospect jobs, and customer data. Revenue estimates are calculated based on job type and region. 
+              Lead sources are classified as either door knocking or company generated based on the source name.
             </div>
           </div>
 
