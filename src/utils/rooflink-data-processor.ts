@@ -152,7 +152,7 @@ export function processApprovedJobs(
         job_status: job.job_status?.label,
         date_approved: job.date_approved,
         date_closed: job.date_closed,
-        region: job.region?.name,
+        region: job.customer?.region?.name,
         job_type: job.job_type
       })
 
