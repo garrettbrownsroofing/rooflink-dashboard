@@ -7,6 +7,8 @@ import ChatInterface from '@/components/ChatInterface'
 import DataExplorer from '@/components/DataExplorer'
 import ComprehensiveDataViewer from '@/components/ComprehensiveDataViewer'
 import MCPDebugger from '@/components/MCPDebugger'
+import EndpointExplorer from '@/components/EndpointExplorer'
+import ComprehensiveDataCollector from '@/components/ComprehensiveDataCollector'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
@@ -19,6 +21,8 @@ export default function Home() {
   const [showDataExplorer, setShowDataExplorer] = useState(false)
   const [showComprehensiveViewer, setShowComprehensiveViewer] = useState(false)
   const [showMCPDebugger, setShowMCPDebugger] = useState(false)
+  const [showEndpointExplorer, setShowEndpointExplorer] = useState(false)
+  const [showDataCollector, setShowDataCollector] = useState(false)
   const [apiKey, setApiKey] = useState<string>('')
 
   const connectToMCP = async () => {
@@ -270,6 +274,72 @@ export default function Home() {
         {showComprehensiveViewer && (
           <div className="mb-8">
             <ComprehensiveDataViewer isConnected={isConnected} apiKey={apiKey} />
+          </div>
+        )}
+
+        {/* Endpoint Explorer Toggle */}
+        <div className="mt-8">
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">🔍 Endpoint Explorer</h3>
+                <p className="text-sm text-gray-600">Discover and test all available MCP endpoints</p>
+              </div>
+              <button
+                onClick={() => setShowEndpointExplorer(!showEndpointExplorer)}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+              >
+                {showEndpointExplorer ? 'Hide Explorer' : 'Show Explorer'}
+              </button>
+            </div>
+            {!showEndpointExplorer && (
+              <div className="mt-4 p-4 bg-indigo-50 rounded-lg">
+                <p className="text-sm text-indigo-800">
+                  <strong>What this does:</strong> Explore and test all available MCP endpoints to understand the complete data landscape. 
+                  This will help us discover all the data sources we can access and ensure we're not missing any valuable information.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Endpoint Explorer */}
+        {showEndpointExplorer && (
+          <div className="mb-8">
+            <EndpointExplorer />
+          </div>
+        )}
+
+        {/* Comprehensive Data Collector Toggle */}
+        <div className="mt-8">
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">📊 Comprehensive Data Collector</h3>
+                <p className="text-sm text-gray-600">Systematically collect data from ALL available endpoints</p>
+              </div>
+              <button
+                onClick={() => setShowDataCollector(!showDataCollector)}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
+              >
+                {showDataCollector ? 'Hide Collector' : 'Show Collector'}
+              </button>
+            </div>
+            {!showDataCollector && (
+              <div className="mt-4 p-4 bg-emerald-50 rounded-lg">
+                <p className="text-sm text-emerald-800">
+                  <strong>What this does:</strong> Systematically tests and collects data from ALL available MCP endpoints and RoofLink API endpoints. 
+                  This will give you a complete picture of all the data sources available and help identify which endpoints provide the most valuable information.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Comprehensive Data Collector */}
+        {showDataCollector && (
+          <div className="mb-8">
+            <ComprehensiveDataCollector />
           </div>
         )}
 
