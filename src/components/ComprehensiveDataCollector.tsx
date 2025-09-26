@@ -232,8 +232,8 @@ export default function ComprehensiveDataCollector() {
 
   const exportAllData = () => {
     const allData = Array.from(collectionResults.entries()).map(([endpoint, result]) => ({
-      endpoint,
-      ...result
+      ...result,
+      endpoint // This will override the endpoint from result if it exists
     }))
     
     const dataStr = JSON.stringify(allData, null, 2)
