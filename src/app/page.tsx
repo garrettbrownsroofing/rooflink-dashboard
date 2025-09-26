@@ -9,6 +9,7 @@ import ComprehensiveDataViewer from '@/components/ComprehensiveDataViewer'
 import MCPDebugger from '@/components/MCPDebugger'
 import EndpointExplorer from '@/components/EndpointExplorer'
 import ComprehensiveDataCollector from '@/components/ComprehensiveDataCollector'
+import DebugConsole from '@/components/DebugConsole'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
@@ -23,6 +24,7 @@ export default function Home() {
   const [showMCPDebugger, setShowMCPDebugger] = useState(false)
   const [showEndpointExplorer, setShowEndpointExplorer] = useState(false)
   const [showDataCollector, setShowDataCollector] = useState(false)
+  const [showDebugConsole, setShowDebugConsole] = useState(false)
   const [apiKey, setApiKey] = useState<string>('')
 
   const connectToMCP = async () => {
@@ -204,6 +206,40 @@ export default function Home() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Debug Console Toggle - Prominent placement for easy access */}
+        <div className="mt-8">
+          <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg shadow p-6 mb-6 border border-red-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-red-800">🐛 Debug Console - Copy & Paste Everything Here</h3>
+                <p className="text-sm text-red-700">One-click comprehensive debug data collection for easy sharing</p>
+              </div>
+              <button
+                onClick={() => setShowDebugConsole(!showDebugConsole)}
+                className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium text-lg"
+              >
+                {showDebugConsole ? 'Hide Debug Console' : 'Show Debug Console'}
+              </button>
+            </div>
+            {!showDebugConsole && (
+              <div className="mt-4 p-4 bg-red-100 rounded-lg">
+                <p className="text-sm text-red-800">
+                  <strong>🎯 Perfect for sharing with me:</strong> This collects ALL debug information, API responses, errors, 
+                  connection status, and system data in one organized report. Just click "Collect All Debug Info" then 
+                  "Copy Debug Report" and paste everything here for me to analyze and fix!
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Debug Console */}
+        {showDebugConsole && (
+          <div className="mb-8">
+            <DebugConsole />
           </div>
         )}
 
