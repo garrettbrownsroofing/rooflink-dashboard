@@ -6,6 +6,7 @@ import MonroeRevenueDashboard from '@/components/MonroeRevenueDashboard'
 import ChatInterface from '@/components/ChatInterface'
 import DataExplorer from '@/components/DataExplorer'
 import ComprehensiveDataViewer from '@/components/ComprehensiveDataViewer'
+import MCPDebugger from '@/components/MCPDebugger'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
@@ -17,6 +18,7 @@ export default function Home() {
   const [dashboardData, setDashboardData] = useState<any>(null)
   const [showDataExplorer, setShowDataExplorer] = useState(false)
   const [showComprehensiveViewer, setShowComprehensiveViewer] = useState(false)
+  const [showMCPDebugger, setShowMCPDebugger] = useState(false)
   const [apiKey, setApiKey] = useState<string>('')
 
   const connectToMCP = async () => {
@@ -268,6 +270,40 @@ export default function Home() {
         {showComprehensiveViewer && (
           <div className="mb-8">
             <ComprehensiveDataViewer isConnected={isConnected} apiKey={apiKey} />
+          </div>
+        )}
+
+        {/* MCP Debugger Toggle */}
+        <div className="mt-8">
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">🔧 MCP Connection Debugger</h3>
+                <p className="text-sm text-gray-600">Debug MCP connection and data retrieval issues</p>
+              </div>
+              <button
+                onClick={() => setShowMCPDebugger(!showMCPDebugger)}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                {showMCPDebugger ? 'Hide Debugger' : 'Show Debugger'}
+              </button>
+            </div>
+            {!showMCPDebugger && (
+              <div className="mt-4 p-4 bg-red-50 rounded-lg">
+                <p className="text-sm text-red-800">
+                  <strong>What this does:</strong> Tests all MCP connection methods and data retrieval functions to identify 
+                  why we're only getting limited data instead of the full jobs dataset. This will help us understand 
+                  if the issue is with the MCP connection, API parameters, or data structure.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* MCP Debugger */}
+        {showMCPDebugger && (
+          <div className="mb-8">
+            <MCPDebugger isConnected={isConnected} apiKey={apiKey} />
           </div>
         )}
 
