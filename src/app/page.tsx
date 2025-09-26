@@ -10,6 +10,7 @@ import MCPDebugger from '@/components/MCPDebugger'
 import EndpointExplorer from '@/components/EndpointExplorer'
 import ComprehensiveDataCollector from '@/components/ComprehensiveDataCollector'
 import DebugConsole from '@/components/DebugConsole'
+import DataInsights from '@/components/DataInsights'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
@@ -25,6 +26,7 @@ export default function Home() {
   const [showEndpointExplorer, setShowEndpointExplorer] = useState(false)
   const [showDataCollector, setShowDataCollector] = useState(false)
   const [showDebugConsole, setShowDebugConsole] = useState(false)
+  const [showDataInsights, setShowDataInsights] = useState(false)
   const [apiKey, setApiKey] = useState<string>('')
 
   const connectToMCP = async () => {
@@ -240,6 +242,40 @@ export default function Home() {
         {showDebugConsole && (
           <div className="mb-8">
             <DebugConsole />
+          </div>
+        )}
+
+        {/* Data Insights Toggle */}
+        <div className="mt-8">
+          <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg shadow p-6 mb-6 border border-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-green-800">📊 Business Data Insights</h3>
+                <p className="text-sm text-green-700">Comprehensive analysis of your actual business data</p>
+              </div>
+              <button
+                onClick={() => setShowDataInsights(!showDataInsights)}
+                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-lg"
+              >
+                {showDataInsights ? 'Hide Insights' : 'Show Insights'}
+              </button>
+            </div>
+            {!showDataInsights && (
+              <div className="mt-4 p-4 bg-green-100 rounded-lg">
+                <p className="text-sm text-green-800">
+                  <strong>🎯 Real Business Analytics:</strong> This analyzes your actual data from RoofLink - 
+                  1,817 approved jobs, 7,376 prospects, 9,160 customers, and more! Get insights into lead sources, 
+                  regional performance, top performers, and recent activity.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Data Insights */}
+        {showDataInsights && (
+          <div className="mb-8">
+            <DataInsights />
           </div>
         )}
 
