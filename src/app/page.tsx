@@ -5,6 +5,7 @@ import { mcpClient, MCPEndpoint } from '@/lib/mcp-client'
 import MonroeRevenueDashboard from '@/components/MonroeRevenueDashboard'
 import ChatInterface from '@/components/ChatInterface'
 import DataExplorer from '@/components/DataExplorer'
+import ComprehensiveDataViewer from '@/components/ComprehensiveDataViewer'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
@@ -15,6 +16,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [dashboardData, setDashboardData] = useState<any>(null)
   const [showDataExplorer, setShowDataExplorer] = useState(false)
+  const [showComprehensiveViewer, setShowComprehensiveViewer] = useState(false)
   const [apiKey, setApiKey] = useState<string>('')
 
   const connectToMCP = async () => {
@@ -233,6 +235,39 @@ export default function Home() {
         {showDataExplorer && (
           <div className="mb-8">
             <DataExplorer isConnected={isConnected} apiKey={apiKey} />
+          </div>
+        )}
+
+        {/* Comprehensive Data Viewer Toggle */}
+        <div className="mt-8">
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">📊 Comprehensive Data Viewer</h3>
+                <p className="text-sm text-gray-600">Extract and view ALL data in structured format</p>
+              </div>
+              <button
+                onClick={() => setShowComprehensiveViewer(!showComprehensiveViewer)}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                {showComprehensiveViewer ? 'Hide Data Viewer' : 'Show Data Viewer'}
+              </button>
+            </div>
+            {!showComprehensiveViewer && (
+              <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                <p className="text-sm text-green-800">
+                  <strong>What this does:</strong> Extracts ALL available data from your RoofLink API and displays it in a structured, readable format. 
+                  This will show you every single data item that's available, organized by endpoint, so you can see exactly what information you have access to.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Comprehensive Data Viewer */}
+        {showComprehensiveViewer && (
+          <div className="mb-8">
+            <ComprehensiveDataViewer isConnected={isConnected} apiKey={apiKey} />
           </div>
         )}
 
