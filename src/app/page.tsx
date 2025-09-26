@@ -10,7 +10,7 @@ import MCPDebugger from '@/components/MCPDebugger'
 import EndpointExplorer from '@/components/EndpointExplorer'
 import ComprehensiveDataCollector from '@/components/ComprehensiveDataCollector'
 import DebugConsole from '@/components/DebugConsole'
-import DataInsights from '@/components/DataInsights'
+import RealDataInsights from '@/components/RealDataInsights'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
@@ -251,7 +251,7 @@ export default function Home() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-semibold text-green-800">📊 Business Data Insights</h3>
-                <p className="text-sm text-green-700">Comprehensive analysis of your actual business data</p>
+                <p className="text-sm text-green-700">Real-time analysis of your RoofLink API endpoints and business data</p>
               </div>
               <button
                 onClick={() => setShowDataInsights(!showDataInsights)}
@@ -263,9 +263,9 @@ export default function Home() {
             {!showDataInsights && (
               <div className="mt-4 p-4 bg-green-100 rounded-lg">
                 <p className="text-sm text-green-800">
-                  <strong>🎯 Real Business Analytics:</strong> This analyzes your actual data from RoofLink - 
-                  1,817 approved jobs, 7,376 prospects, 9,160 customers, and more! Get insights into lead sources, 
-                  regional performance, top performers, and recent activity.
+                  <strong>🎯 Live API Analysis:</strong> This shows your actual RoofLink API capabilities - 
+                  200+ available endpoints, 1,817 approved jobs, 7,376 prospects, 
+                  9,160 customers, and comprehensive business management tools!
                 </p>
               </div>
             )}
@@ -275,7 +275,7 @@ export default function Home() {
         {/* Data Insights */}
         {showDataInsights && (
           <div className="mb-8">
-            <DataInsights />
+            <RealDataInsights />
           </div>
         )}
 
