@@ -323,10 +323,86 @@ export default function ComprehensiveJobDashboard({ className = '' }: JobDashboa
   ]
 
   useEffect(() => {
-    // For now, use sample data. In production, this would fetch from the API
-    setJobs(sampleJobs)
-    setLoading(false)
+    fetchAllJobs()
   }, [])
+
+  const fetchAllJobs = async () => {
+    try {
+      setLoading(true)
+      
+      // Connect to MCP if not already connected
+      const connected = await mcpClient.connect()
+      if (!connected) {
+        console.error('Failed to connect to MCP server')
+        // Fallback to sample data
+        setJobs(sampleJobs)
+        setLoading(false)
+        return
+      }
+
+      // Fetch approved jobs
+      console.log('Fetching approved jobs...')
+      const approvedJobsResponse = await mcpClient.getRoofLinkData('/light/jobs/approved/')
+      
+      // Fetch prospect jobs
+      console.log('Fetching prospect jobs...')
+      const prospectJobsResponse = await mcpClient.getRoofLinkData('/light/jobs/prospect/')
+
+      let allJobs: JobWithCategory[] = []
+
+      // Process approved jobs
+      if (approvedJobsResponse?.data?.content?.[0]?.text) {
+        try {
+          const approvedData = JSON.parse(approvedJobsResponse.data.content[0].text)
+          if (approvedData.results && Array.isArray(approvedData.results)) {
+            const approvedJobs = approvedData.results.map((job: any) => ({
+              ...job,
+              category: 'Approved' as const,
+              job_status_label: job.job_status?.label || 'Approved'
+            }))
+            allJobs = [...allJobs, ...approvedJobs]
+            console.log(`Fetched ${approvedJobs.length} approved jobs`)
+          }
+        } catch (error) {
+          console.error('Error parsing approved jobs:', error)
+        }
+      }
+
+      // Process prospect jobs
+      if (prospectJobsResponse?.data?.content?.[0]?.text) {
+        try {
+          const prospectData = JSON.parse(prospectJobsResponse.data.content[0].text)
+          if (prospectData.results && Array.isArray(prospectData.results)) {
+            const prospectJobs = prospectData.results.map((job: any) => ({
+              ...job,
+              category: 'Prospect' as const,
+              job_status_label: 'Prospect'
+            }))
+            allJobs = [...allJobs, ...prospectJobs]
+            console.log(`Fetched ${prospectJobs.length} prospect jobs`)
+          }
+        } catch (error) {
+          console.error('Error parsing prospect jobs:', error)
+        }
+      }
+
+      // If we got real data, use it; otherwise fallback to sample data
+      if (allJobs.length > 0) {
+        setJobs(allJobs)
+        console.log(`Total jobs loaded: ${allJobs.length}`)
+      } else {
+        console.log('No real data available, using sample data')
+        setJobs(sampleJobs)
+      }
+
+    } catch (error) {
+      console.error('Error fetching jobs:', error)
+      // Fallback to sample data
+      setJobs(sampleJobs)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = job.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -376,12 +452,28 @@ export default function ComprehensiveJobDashboard({ className = '' }: JobDashboa
 
   return (
     <div className={`space-y-6 ${className}`}>
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">Comprehensive Job Dashboard</h1>
-        <p className="text-gray-600 mb-4">
-          View and manage all {jobs.length} jobs in the RoofLink system
-        </p>
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-sm border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Comprehensive Job Dashboard</h1>
+              <p className="text-gray-600">
+                View and manage all {jobs.length} jobs in the RoofLink system
+              </p>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={fetchAllJobs}
+                disabled={loading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>{loading ? 'Loading...' : 'Refresh Data'}</span>
+              </button>
+            </div>
+          </div>
         
         {/* Filters */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -491,9 +583,15 @@ export default function ComprehensiveJobDashboard({ className = '' }: JobDashboa
                 <p className="text-gray-900 mt-1">{job.full_address}</p>
               </div>
 
-              <div className="text-sm">
-                <span className="text-gray-500">Sales Rep:</span>
-                <span className="ml-1 font-medium">{job.customer.rep?.name || 'Not assigned'}</span>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500">Sales Rep:</span>
+                  <span className="ml-1 font-medium">{job.customer.rep?.name || 'Not assigned'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Project Manager:</span>
+                  <span className="ml-1 font-medium">{job.customer.project_manager?.name || 'Not assigned'}</span>
+                </div>
               </div>
 
               <div className="text-sm">
@@ -501,15 +599,52 @@ export default function ComprehensiveJobDashboard({ className = '' }: JobDashboa
                 <span className="ml-1 font-medium">{job.customer.lead_source?.name || 'Not specified'}</span>
               </div>
 
-              <div className="text-sm">
-                <span className="text-gray-500">Created:</span>
-                <span className="ml-1 font-medium">{formatDate(job.date_created)}</span>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500">Created:</span>
+                  <span className="ml-1 font-medium">{formatDate(job.date_created)}</span>
+                </div>
+                {job.category === 'Approved' && 'date_approved' in job && job.date_approved && (
+                  <div>
+                    <span className="text-gray-500">Approved:</span>
+                    <span className="ml-1 font-medium">{formatDate(job.date_approved)}</span>
+                  </div>
+                )}
               </div>
 
-              {job.category === 'Approved' && 'date_approved' in job && job.date_approved && (
+              {/* Pipeline Status for Prospect Jobs */}
+              {job.category === 'Prospect' && job.pipeline && (
                 <div className="text-sm">
-                  <span className="text-gray-500">Approved:</span>
-                  <span className="ml-1 font-medium">{formatDate(job.date_approved)}</span>
+                  <span className="text-gray-500">Pipeline Status:</span>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      job.pipeline.verify_lead?.complete ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      Lead {job.pipeline.verify_lead?.complete ? 'Verified' : 'Pending'}
+                    </span>
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      job.pipeline.submit?.complete ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {job.pipeline.submit?.complete ? 'Submitted' : 'Not Submitted'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Collections Status for Approved Jobs */}
+              {job.category === 'Approved' && (
+                <div className="text-sm">
+                  <span className="text-gray-500">Collections:</span>
+                  <div className="mt-1 flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full flex items-center justify-center">
+                      <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <span className="text-xs text-gray-600">
+                      {job.last_note || 'Status pending'}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -682,7 +817,7 @@ export default function ComprehensiveJobDashboard({ className = '' }: JobDashboa
       {/* Summary Stats */}
       <div className="bg-white rounded-lg shadow-sm border p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Summary</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-center">
           <div>
             <div className="text-2xl font-bold text-blue-600">{filteredJobs.length}</div>
             <div className="text-sm text-gray-600">Filtered Jobs</div>
@@ -704,6 +839,87 @@ export default function ComprehensiveJobDashboard({ className = '' }: JobDashboa
               {filteredJobs.filter(job => job.customer.region.name.toLowerCase().includes('la')).length}
             </div>
             <div className="text-sm text-gray-600">LA Region Jobs</div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-red-600">
+              {filteredJobs.filter(job => job.job_type === 'c').length}
+            </div>
+            <div className="text-sm text-gray-600">Commercial Jobs</div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-indigo-600">
+              {filteredJobs.filter(job => job.job_type === 'r').length}
+            </div>
+            <div className="text-sm text-gray-600">Residential Jobs</div>
+          </div>
+        </div>
+
+        {/* Additional Metrics */}
+        <div className="mt-6 pt-6 border-t">
+          <h4 className="text-md font-semibold text-gray-900 mb-3">Key Metrics</h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <h5 className="text-sm font-medium text-gray-700 mb-2">Lead Sources</h5>
+              <div className="space-y-1">
+                {Object.entries(
+                  filteredJobs.reduce((acc, job) => {
+                    const source = job.customer.lead_source?.name || 'Not specified'
+                    acc[source] = (acc[source] || 0) + 1
+                    return acc
+                  }, {} as Record<string, number>)
+                )
+                  .sort(([,a], [,b]) => b - a)
+                  .slice(0, 5)
+                  .map(([source, count]) => (
+                    <div key={source} className="flex justify-between text-sm">
+                      <span className="text-gray-600">{source}</span>
+                      <span className="font-medium">{count}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+            
+            <div>
+              <h5 className="text-sm font-medium text-gray-700 mb-2">Sales Reps</h5>
+              <div className="space-y-1">
+                {Object.entries(
+                  filteredJobs.reduce((acc, job) => {
+                    const rep = job.customer.rep?.name || 'Not assigned'
+                    acc[rep] = (acc[rep] || 0) + 1
+                    return acc
+                  }, {} as Record<string, number>)
+                )
+                  .sort(([,a], [,b]) => b - a)
+                  .slice(0, 5)
+                  .map(([rep, count]) => (
+                    <div key={rep} className="flex justify-between text-sm">
+                      <span className="text-gray-600">{rep}</span>
+                      <span className="font-medium">{count}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            <div>
+              <h5 className="text-sm font-medium text-gray-700 mb-2">Job Status</h5>
+              <div className="space-y-1">
+                {Object.entries(
+                  filteredJobs.reduce((acc, job) => {
+                    const status = job.job_status_label || 'Unknown'
+                    acc[status] = (acc[status] || 0) + 1
+                    return acc
+                  }, {} as Record<string, number>)
+                )
+                  .sort(([,a], [,b]) => b - a)
+                  .slice(0, 5)
+                  .map(([status, count]) => (
+                    <div key={status} className="flex justify-between text-sm">
+                      <span className="text-gray-600">{status}</span>
+                      <span className="font-medium">{count}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
