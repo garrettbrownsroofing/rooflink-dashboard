@@ -30,8 +30,33 @@ export default function Home() {
   const [showDebugConsole, setShowDebugConsole] = useState(false)
   const [showDataInsights, setShowDataInsights] = useState(false)
   const [showJobDashboard, setShowJobDashboard] = useState(false)
-  const [showSimpleJobViewer, setShowSimpleJobViewer] = useState(false)
+  const [showSimpleJobViewer, setShowSimpleJobViewer] = useState(true)
   const [apiKey, setApiKey] = useState<string>('')
+
+  // Auto-connect to MCP when page loads
+  useEffect(() => {
+    const autoConnect = async () => {
+      try {
+        console.log('Auto-connecting to MCP server...')
+        // Set the API key first
+        mcpClient.setApiKey('K6RCRYiSGSuzi2Xa56wiKTG0VZbZseDbwjwcgBzAaaET7qIqAWAwjvxwzsFLyEqN')
+        setApiKey('K6RCRYiSGSuzi2Xa56wiKTG0VZbZseDbwjwcgBzAaaET7qIqAWAwjvxwzsFLyEqN')
+        
+        const connected = await mcpClient.connect()
+        if (connected) {
+          setIsConnected(true)
+          setConnectionStatus('Connected to RoofLink MCP')
+          console.log('Auto-connected to MCP server successfully')
+        } else {
+          console.log('Auto-connection to MCP server failed')
+        }
+      } catch (error) {
+        console.error('Auto-connection error:', error)
+      }
+    }
+    
+    autoConnect()
+  }, [])
 
   const connectToMCP = async () => {
     try {
