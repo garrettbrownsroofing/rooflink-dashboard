@@ -12,6 +12,7 @@ import ComprehensiveDataCollector from '@/components/ComprehensiveDataCollector'
 import DebugConsole from '@/components/DebugConsole'
 import RealDataInsights from '@/components/RealDataInsights'
 import ComprehensiveJobDashboard from '@/components/ComprehensiveJobDashboard'
+import SimpleJobViewer from '@/components/SimpleJobViewer'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
@@ -29,6 +30,7 @@ export default function Home() {
   const [showDebugConsole, setShowDebugConsole] = useState(false)
   const [showDataInsights, setShowDataInsights] = useState(false)
   const [showJobDashboard, setShowJobDashboard] = useState(false)
+  const [showSimpleJobViewer, setShowSimpleJobViewer] = useState(false)
   const [apiKey, setApiKey] = useState<string>('')
 
   const connectToMCP = async () => {
@@ -312,6 +314,40 @@ export default function Home() {
         {showJobDashboard && (
           <div className="mb-8">
             <ComprehensiveJobDashboard />
+          </div>
+        )}
+
+        {/* Simple Job Viewer Toggle */}
+        <div className="mt-8">
+          <div className="bg-gradient-to-r from-green-50 to-purple-50 rounded-lg shadow p-6 mb-6 border border-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-green-800">🔍 Simple Job Viewer</h3>
+                <p className="text-sm text-green-700">Direct API connection to fetch and display all jobs/prospects with key information</p>
+              </div>
+              <button
+                onClick={() => setShowSimpleJobViewer(!showSimpleJobViewer)}
+                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-lg"
+              >
+                {showSimpleJobViewer ? 'Hide Job Viewer' : 'Show Job Viewer'}
+              </button>
+            </div>
+            {!showSimpleJobViewer && (
+              <div className="mt-4 p-4 bg-green-100 rounded-lg">
+                <p className="text-sm text-green-800">
+                  <strong>📊 Direct API Access:</strong> This component directly connects to the RoofLink API 
+                  to fetch all jobs and prospects. Shows the same information as your sample images: 
+                  job numbers, customer details, lead sources, sales reps, and status information.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Simple Job Viewer */}
+        {showSimpleJobViewer && (
+          <div className="mb-8">
+            <SimpleJobViewer />
           </div>
         )}
 
