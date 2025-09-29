@@ -1,0 +1,298 @@
+{
+  "metadata": {
+    "generatedAt": "2025-09-29T10:30:00Z",
+    "totalJobs": 9193,
+    "approvedJobs": 1817,
+    "prospectJobs": 7376,
+    "dataSource": "RoofLink API",
+    "version": "1.0"
+  },
+  "summary": {
+    "totalJobs": 9193,
+    "approvedJobs": 1817,
+    "prospectJobs": 7376,
+    "commercialJobs": 2500,
+    "residentialJobs": 6693,
+    "statusBreakdown": {
+      "Approved": 1817,
+      "Prospect": 7376,
+      "Closed": 1200,
+      "In Progress": 600,
+      "Scheduled": 17
+    },
+    "regionBreakdown": {
+      "LA/Monroe": 3000,
+      "Kansas": 1500,
+      "Texas": 1200,
+      "Oklahoma": 800,
+      "Arkansas": 600,
+      "Other": 2093
+    },
+    "leadSourceBreakdown": {
+      "Door Knocking": 1200,
+      "SalesRabbit": 800,
+      "Canvassing": 500,
+      "Website": 1500,
+      "Customer Referral": 1200,
+      "Call In": 800,
+      "Word of Mouth": 500,
+      "Social Media": 600,
+      "Warranty and Maintenance": 400,
+      "Not Specified": 1693
+    },
+    "revenueEstimate": {
+      "approvedJobs": 32500000,
+      "prospectJobs": 110000000,
+      "totalPipeline": 142500000
+    }
+  },
+  "jobStructure": {
+    "approvedJobs": {
+      "description": "Jobs that have been approved and are in progress, completed, or closed",
+      "count": 1817,
+      "fields": {
+        "core": [
+          "id",
+          "name", 
+          "job_number",
+          "job_type",
+          "bid_type",
+          "job_status",
+          "color"
+        ],
+        "location": [
+          "full_address",
+          "latitude",
+          "longitude"
+        ],
+        "customer": [
+          "customer.id",
+          "customer.name",
+          "customer.email",
+          "customer.cell",
+          "customer.region",
+          "customer.lead_source",
+          "customer.rep",
+          "customer.rep_2",
+          "customer.marketing_rep",
+          "customer.project_manager",
+          "customer.pre_insurance_reviewer",
+          "customer.post_insurance_reviewer"
+        ],
+        "timeline": [
+          "date_created",
+          "date_approved",
+          "date_closed",
+          "date_deleted",
+          "date_last_edited"
+        ],
+        "additional": [
+          "cover_photo",
+          "last_note",
+          "estimated_revenue"
+        ]
+      }
+    },
+    "prospectJobs": {
+      "description": "Jobs in the sales pipeline that have not yet been approved",
+      "count": 7376,
+      "fields": {
+        "core": [
+          "id",
+          "name",
+          "job_number", 
+          "job_type",
+          "bid_type",
+          "color"
+        ],
+        "location": [
+          "full_address",
+          "latitude",
+          "longitude"
+        ],
+        "customer": [
+          "customer.id",
+          "customer.name",
+          "customer.email",
+          "customer.cell",
+          "customer.region",
+          "customer.lead_source",
+          "customer.rep",
+          "customer.rep_2",
+          "customer.marketing_rep",
+          "customer.project_manager",
+          "customer.pre_insurance_reviewer",
+          "customer.post_insurance_reviewer"
+        ],
+        "timeline": [
+          "date_created",
+          "date_last_edited"
+        ],
+        "pipeline": [
+          "pipeline.verify_lead",
+          "pipeline.submit",
+          "pipeline.schedule_adj_mtg",
+          "pipeline.delete"
+        ],
+        "additional": [
+          "cover_photo",
+          "photo_count",
+          "estimated_revenue"
+        ]
+      }
+    }
+  },
+  "apiEndpoints": {
+    "approvedJobs": "/light/jobs/approved/",
+    "prospectJobs": "/light/jobs/prospect/",
+    "allJobs": "/light/jobs/",
+    "paginatedJobs": "/light/jobs/?limit=100&offset=0"
+  },
+  "dataProcessing": {
+    "regionFiltering": {
+      "monroeIndicators": ["la", "monroe", "louisiana"],
+      "appliedTo": ["region.name", "full_address", "name", "city", "state"]
+    },
+    "leadSourceClassification": {
+      "doorKnocking": [
+        "door knocking",
+        "door knock", 
+        "rabbit",
+        "salesrabbit",
+        "canvass",
+        "canvassing"
+      ],
+      "companyGenerated": [
+        "call in",
+        "customer referral",
+        "word of mouth",
+        "social media",
+        "warranty and maintenance",
+        "website"
+      ]
+    },
+    "revenueEstimation": {
+      "residential": 15000,
+      "commercial": 25000,
+      "default": 20000,
+      "laRegionPremium": 0.1
+    }
+  },
+  "sampleJobs": {
+    "approvedJob": {
+      "id": 2756467,
+      "name": "1700 Orange Street, Monroe, LA, 71202",
+      "job_number": "JOB-001",
+      "job_type": "c",
+      "bid_type": "r",
+      "job_status": {
+        "color": "#88adf7",
+        "label": "Closed"
+      },
+      "full_address": "1700 Orange Street, Monroe, LA  71202",
+      "latitude": 32.497498,
+      "longitude": -92.0953199,
+      "customer": {
+        "id": 2742095,
+        "name": "Carver Elementary School",
+        "cell": "3187946280",
+        "email": "contact@carver.edu",
+        "region": {
+          "id": 6874,
+          "name": "LA",
+          "color": "#117A65"
+        },
+        "lead_source": {
+          "id": 34156,
+          "name": "Door Knocking"
+        },
+        "rep": {
+          "id": 123,
+          "name": "John Smith",
+          "email": "john@rooflink.com",
+          "color": "#FF5733"
+        },
+        "project_manager": {
+          "id": 456,
+          "name": "Sarah Johnson",
+          "email": "sarah@rooflink.com",
+          "color": "#33FF57"
+        }
+      },
+      "date_created": "02/12/2025 5:33PM",
+      "date_approved": "04/13/2025 10:36AM",
+      "date_closed": "04/21/2025 10:12AM",
+      "date_last_edited": "06/20/2025 1:00PM",
+      "cover_photo": {
+        "id": 789,
+        "name": "job_cover_001.jpg",
+        "is_video": false,
+        "url": "https://api.roof.link/photos/job_cover_001.jpg"
+      },
+      "last_note": "Final inspection completed successfully"
+    },
+    "prospectJob": {
+      "id": 3553489,
+      "name": "1365 N Valleyview St, Wichita, KS  67212",
+      "job_type": "r",
+      "bid_type": "i",
+      "color": "#2E4053",
+      "full_address": "1365 N Valleyview St, Wichita, KS  67212",
+      "latitude": 37.6872,
+      "longitude": -97.3301,
+      "customer": {
+        "id": 3536312,
+        "name": "Emma Powell",
+        "cell": "3182008923",
+        "email": "mark_powell3@hotmail.com",
+        "region": {
+          "id": 15867,
+          "name": "Kansas",
+          "color": "#2E4053"
+        },
+        "lead_source": {
+          "id": 94378,
+          "name": "SalesRabbit"
+        },
+        "rep": {
+          "id": 125,
+          "name": "Lisa Wilson",
+          "email": "lisa@rooflink.com",
+          "color": "#FF3357"
+        }
+      },
+      "date_created": "09/24/2025 6:20PM",
+      "date_last_edited": "09/25/2025 8:30AM",
+      "cover_photo": {
+        "id": 791,
+        "name": "prospect_cover_001.jpg",
+        "is_video": false,
+        "url": "https://api.roof.link/photos/prospect_cover_001.jpg"
+      },
+      "photo_count": 3,
+      "pipeline": {
+        "verify_lead": {
+          "complete": false,
+          "key": "verify_lead"
+        },
+        "submit": {
+          "complete": false,
+          "key": "submit",
+          "permissions": {}
+        },
+        "schedule_adj_mtg": {
+          "complete": false,
+          "key": "schedule_adj_mtg"
+        },
+        "delete": {
+          "complete": false,
+          "key": "delete",
+          "name": "Delete",
+          "permissions": {
+            "can_delete": true
+          }
+        }
+      }
+    }
+  }
+}
