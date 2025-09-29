@@ -45,51 +45,24 @@ class RoofLinkMCPClient {
 
   async connect(): Promise<boolean> {
     try {
-      console.log('Connecting to RoofLink MCP server:', this.serverUrl)
+      console.log('Initializing RoofLink API connection...')
       
-      // Test connection to MCP server
-
-      // Initialize the connection with the server
-      const initResult = await fetch(this.serverUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json, text/event-stream'
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'initialize',
-          params: {
-            protocolVersion: '2024-11-05',
-            capabilities: {
-              tools: {}
-            },
-            clientInfo: {
-              name: 'rooflink-dashboard',
-              version: '1.0.0'
-            }
-          },
-          id: 1
-        })
-      })
-
-      if (!initResult.ok) {
-        throw new Error(`HTTP ${initResult.status}: ${initResult.statusText}`)
+      // Since we're making direct API calls, we don't need to connect to an MCP server
+      // Just test that we have an API key
+      if (!this.apiKey) {
+        console.warn('No API key provided - some features may not work')
       }
-
-      const initData = await initResult.text()
-      console.log('MCP server initialization response:', initData)
       
       this.connection = {
         isConnected: true,
-        serverUrl: this.serverUrl,
+        serverUrl: 'https://api.roof.link/api',
         lastConnected: new Date()
       }
       
-      console.log('Successfully connected to RoofLink MCP server')
+      console.log('Successfully initialized RoofLink API connection')
       return true
     } catch (error) {
-      console.error('Failed to connect to MCP server:', error)
+      console.error('Failed to initialize API connection:', error)
       return false
     }
   }
@@ -203,48 +176,32 @@ class RoofLinkMCPClient {
   }
 
   async getRoofLinkData(apiPath: string): Promise<any> {
-    if (!this.connection?.isConnected) {
-      throw new Error('Not connected to MCP server')
-    }
-
     try {
       console.log(`Fetching RoofLink data from API path: ${apiPath}`)
       
+      // Ensure we have a connection (even if it's just initialized)
+      if (!this.connection?.isConnected) {
+        await this.connect()
+      }
+      
       // Prepare headers for the API request
-      const headers: { name: string; value: string }[] = [
-        { name: 'Accept', value: 'application/json' }
-      ]
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
       
       // Add API key if available
       if (this.apiKey) {
-        headers.push({ name: 'X-API-KEY', value: this.apiKey })
+        headers['X-API-KEY'] = this.apiKey
         console.log('Using API key for authentication')
       } else {
         console.warn('No API key provided - request may fail with authentication error')
       }
       
-      // Use the execute-request tool to call the actual RoofLink API
-      const response = await fetch(this.serverUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json, text/event-stream'
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'tools/call',
-          params: {
-            name: 'execute-request',
-            arguments: {
-              harRequest: {
-                method: 'get',
-                url: `https://api.roof.link/api${apiPath}`,
-                headers: headers
-              }
-            }
-          },
-          id: Date.now()
-        })
+      // Make direct API call to RoofLink API
+      const response = await fetch(`https://api.roof.link/api${apiPath}`, {
+        method: 'GET',
+        headers: headers
       })
 
       if (!response.ok) {
@@ -252,19 +209,12 @@ class RoofLinkMCPClient {
       }
 
       const responseData = await response.text()
-      console.log('Raw response from MCP server:', responseData)
+      console.log('Raw response from RoofLink API:', responseData)
       
-      // Parse the response - it might be in different formats
+      // Parse the response
       let parsed
       try {
-        if (responseData.includes('data: ')) {
-          // Server-sent events format
-          const dataPart = responseData.split('data: ')[1]
-          parsed = JSON.parse(dataPart)
-        } else {
-          // Direct JSON response
-          parsed = JSON.parse(responseData)
-        }
+        parsed = JSON.parse(responseData)
       } catch (parseError) {
         console.error('Failed to parse response:', parseError)
         console.log('Response was:', responseData)
@@ -273,19 +223,18 @@ class RoofLinkMCPClient {
       
       console.log('Parsed response:', parsed)
       
-      // Check if we got an error from the MCP server
+      // Check if we got an error from the API
       if (parsed.error) {
-        throw new Error(`MCP server error: ${parsed.error.message || parsed.error}`)
-      }
-      
-      // Check if the result contains an error
-      if (parsed.result?.isError) {
-        throw new Error(`API Error: ${parsed.result.content?.[0]?.text || 'Unknown error'}`)
+        throw new Error(`API Error: ${parsed.error.message || parsed.error}`)
       }
       
       return {
         endpoint: apiPath,
-        data: parsed.result,
+        data: {
+          content: [{
+            text: JSON.stringify(parsed)
+          }]
+        },
         timestamp: new Date().toISOString(),
         rawResponse: parsed
       }
@@ -296,31 +245,74 @@ class RoofLinkMCPClient {
       return {
         endpoint: apiPath,
         data: {
-          message: `Mock data for ${apiPath}`,
-          error: error instanceof Error ? error.message : 'Unknown error',
-          mock: true,
-          sampleItems: [
-            {
-              id: 1,
-              region: 'LA',
-              city: 'Monroe',
-              state: 'LA',
-              status: 'approved',
-              amount: 25000,
-              source: 'website',
-              verified: true
-            },
-            {
-              id: 2,
-              region: 'LA',
-              city: 'Monroe',
-              state: 'LA',
-              status: 'pending',
-              amount: 18000,
-              source: 'door knock',
-              verified: false
-            }
-          ]
+          content: [{
+            text: JSON.stringify({
+              message: `Mock data for ${apiPath}`,
+              error: error instanceof Error ? error.message : 'Unknown error',
+              mock: true,
+              results: [
+                {
+                  id: 1,
+                  name: "Sample Job 1",
+                  job_number: "JOB-001",
+                  job_type: "r",
+                  bid_type: "i",
+                  job_status: {
+                    color: "#117A65",
+                    label: "Approved"
+                  },
+                  full_address: "123 Main St, Monroe, LA 71201",
+                  customer: {
+                    id: 1,
+                    name: "John Doe",
+                    cell: "3181234567",
+                    email: "john@example.com",
+                    region: {
+                      name: "LA"
+                    },
+                    lead_source: {
+                      name: "Door Knocking"
+                    },
+                    rep: {
+                      name: "Sales Rep 1"
+                    }
+                  },
+                  date_created: "2025-01-01T00:00:00Z",
+                  date_approved: "2025-01-02T00:00:00Z",
+                  last_note: "Sample job for testing"
+                },
+                {
+                  id: 2,
+                  name: "Sample Job 2",
+                  job_number: "JOB-002",
+                  job_type: "c",
+                  bid_type: "r",
+                  job_status: {
+                    color: "#88adf7",
+                    label: "Prospect"
+                  },
+                  full_address: "456 Oak St, Monroe, LA 71202",
+                  customer: {
+                    id: 2,
+                    name: "Jane Smith",
+                    cell: "3187654321",
+                    email: "jane@example.com",
+                    region: {
+                      name: "LA"
+                    },
+                    lead_source: {
+                      name: "Website"
+                    },
+                    rep: {
+                      name: "Sales Rep 2"
+                    }
+                  },
+                  date_created: "2025-01-03T00:00:00Z",
+                  last_note: "Another sample job for testing"
+                }
+              ]
+            })
+          }]
         },
         timestamp: new Date().toISOString(),
         error: error instanceof Error ? error.message : 'Unknown error'
