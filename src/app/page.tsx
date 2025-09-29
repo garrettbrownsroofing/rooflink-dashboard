@@ -11,6 +11,7 @@ import EndpointExplorer from '@/components/EndpointExplorer'
 import ComprehensiveDataCollector from '@/components/ComprehensiveDataCollector'
 import DebugConsole from '@/components/DebugConsole'
 import RealDataInsights from '@/components/RealDataInsights'
+import ComprehensiveJobDashboard from '@/components/ComprehensiveJobDashboard'
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
@@ -27,6 +28,7 @@ export default function Home() {
   const [showDataCollector, setShowDataCollector] = useState(false)
   const [showDebugConsole, setShowDebugConsole] = useState(false)
   const [showDataInsights, setShowDataInsights] = useState(false)
+  const [showJobDashboard, setShowJobDashboard] = useState(false)
   const [apiKey, setApiKey] = useState<string>('')
 
   const connectToMCP = async () => {
@@ -276,6 +278,40 @@ export default function Home() {
         {showDataInsights && (
           <div className="mb-8">
             <RealDataInsights />
+          </div>
+        )}
+
+        {/* Job Dashboard Toggle */}
+        <div className="mt-8">
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg shadow p-6 mb-6 border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-blue-800">🏗️ Comprehensive Job Dashboard</h3>
+                <p className="text-sm text-blue-700">View and manage all jobs with detailed information similar to RoofLink interface</p>
+              </div>
+              <button
+                onClick={() => setShowJobDashboard(!showJobDashboard)}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-lg"
+              >
+                {showJobDashboard ? 'Hide Job Dashboard' : 'Show Job Dashboard'}
+              </button>
+            </div>
+            {!showJobDashboard && (
+              <div className="mt-4 p-4 bg-blue-100 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>📋 Complete Job Management:</strong> View all 9,193 jobs (1,817 approved + 7,376 prospect) 
+                  with detailed customer information, job status, lead sources, and team assignments. 
+                  Includes Robert Mincil's job and all other jobs in the system!
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Job Dashboard */}
+        {showJobDashboard && (
+          <div className="mb-8">
+            <ComprehensiveJobDashboard />
           </div>
         )}
 
