@@ -8,7 +8,124 @@ interface JobDashboardProps {
   className?: string
 }
 
-interface JobWithCategory extends (RoofLinkApprovedJob | RoofLinkProspectJob) {
+interface JobWithCategory {
+  id: number
+  name: string
+  job_number?: string
+  job_type: 'c' | 'r'
+  bid_type: 'r' | 'c' | 'i' | ''
+  color?: string
+  job_status?: {
+    color: string
+    label: string
+  }
+  full_address: string
+  latitude: number
+  longitude: number
+  customer: {
+    id: number
+    name: string
+    cell?: string
+    email?: string
+    region: {
+      id: number
+      name: string
+      color: string
+    }
+    lead_source?: {
+      id: number
+      name: string
+    }
+    rep?: {
+      id: number
+      name: string
+      email: string
+      color: string
+    }
+    rep_2?: {
+      id: number
+      name: string
+      email: string
+      color: string
+    }
+    marketing_rep?: {
+      id: number
+      name: string
+      email: string
+      color: string
+    }
+    project_manager?: {
+      id: number
+      name: string
+      email: string
+      color: string
+    }
+    pre_insurance_reviewer?: {
+      id: number
+      name: string
+      email: string
+      color: string
+    }
+    post_insurance_reviewer?: {
+      id: number
+      name: string
+      email: string
+      color: string
+    }
+  }
+  date_created: string
+  date_last_edited: string
+  date_approved?: string
+  date_closed?: string
+  date_deleted?: string
+  cover_photo?: {
+    id?: number
+    is_video: boolean
+    name: string
+    preview_url?: string
+    thumb_url?: string
+    url?: string
+  }
+  last_note?: string
+  photo_count?: number
+  pipeline?: {
+    delete: {
+      complete: boolean
+      key: string
+      name: string
+      permissions: {
+        can_delete: boolean
+      }
+      date?: string
+      deleted_by?: {
+        id: number
+        name: string
+        email: string
+        color: string
+      }
+    }
+    schedule_adj_mtg: {
+      complete: boolean
+      key: string
+    }
+    submit: {
+      complete: boolean
+      key: string
+      permissions: any
+    }
+    verify_lead: {
+      complete: boolean
+      key: string
+      completed_by?: {
+        id: number
+        name: string
+        email: string
+        color: string
+      }
+      date?: string
+      name?: string
+    }
+  }
   category: 'Approved' | 'Prospect'
   job_status_label: string
 }
