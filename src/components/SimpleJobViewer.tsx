@@ -57,20 +57,46 @@ export default function SimpleJobViewer() {
       setLoading(true)
       setError(null)
       
+      console.log('Starting job fetch process...')
+      console.log('MCP Client connection status:', mcpClient.getConnectionStatus())
+      
       console.log('Connecting to MCP server...')
       const connected = await mcpClient.connect()
+      console.log('MCP connection result:', connected)
       
       if (!connected) {
         throw new Error('Failed to connect to MCP server')
       }
 
-      console.log('Fetching approved jobs...')
-      const approvedResponse = await mcpClient.getRoofLinkData('/light/jobs/approved/')
-      console.log('Approved jobs response:', approvedResponse)
+      // Try multiple endpoints to find working ones
+      console.log('Trying different job endpoints...')
+      
+      let approvedResponse = null
+      let prospectResponse = null
+      
+      // Try approved jobs endpoint
+      try {
+        console.log('Fetching approved jobs...')
+        approvedResponse = await mcpClient.getRoofLinkData('/light/jobs/approved/')
+        console.log('Approved jobs response:', JSON.stringify(approvedResponse, null, 2))
+      } catch (error) {
+        console.log('Approved jobs endpoint failed, trying alternative...')
+        try {
+          approvedResponse = await mcpClient.getRoofLinkData('/light/jobs/?limit=100&offset=0')
+          console.log('Alternative jobs response:', JSON.stringify(approvedResponse, null, 2))
+        } catch (altError) {
+          console.log('Alternative endpoint also failed:', altError)
+        }
+      }
 
-      console.log('Fetching prospect jobs...')
-      const prospectResponse = await mcpClient.getRoofLinkData('/light/jobs/prospect/')
-      console.log('Prospect jobs response:', prospectResponse)
+      // Try prospect jobs endpoint
+      try {
+        console.log('Fetching prospect jobs...')
+        prospectResponse = await mcpClient.getRoofLinkData('/light/jobs/prospect/')
+        console.log('Prospect jobs response:', JSON.stringify(prospectResponse, null, 2))
+      } catch (error) {
+        console.log('Prospect jobs endpoint failed:', error)
+      }
 
       let allJobs: SimpleJob[] = []
 
@@ -173,11 +199,118 @@ export default function SimpleJobViewer() {
       }
 
       console.log(`Total jobs loaded: ${allJobs.length}`)
-      setJobs(allJobs)
+      
+      if (allJobs.length > 0) {
+        setJobs(allJobs)
+      } else {
+        console.log('No real data available, using sample data')
+        // Fallback to sample data
+        const sampleJobs: SimpleJob[] = [
+          {
+            id: 3235064,
+            name: "8440 Beebe Dr, Greenwood, LA, 71033",
+            job_number: "3235064",
+            job_type: "r",
+            bid_type: "i",
+            job_status: { color: "#117A65", label: "BUILD NEXT WEEK" },
+            full_address: "8440 Beebe Dr, Greenwood, LA 71033",
+            customer: {
+              id: 2742097,
+              name: "Robert Mincil (Browns Roofing)",
+              cell: "3185195200",
+              email: "tester@tester.com",
+              region: { name: "Shreveport" },
+              lead_source: { name: "Door Knocking" },
+              rep: { name: "Austin Race" },
+              project_manager: { name: "Austin Race" },
+              marketing_rep: { name: "Carter Martin" }
+            },
+            date_created: "06/24/2025 4:58PM",
+            date_approved: "08/06/2025 10:44AM",
+            last_note: "Final Check Approved 6 days ago. Next Step: Request RD",
+            category: 'Approved'
+          },
+          {
+            id: 2756467,
+            name: "1700 Orange Street, Monroe, LA, 71202",
+            job_number: "JOB-001",
+            job_type: "c",
+            bid_type: "r",
+            job_status: { color: "#88adf7", label: "Closed" },
+            full_address: "1700 Orange Street, Monroe, LA  71202",
+            customer: {
+              id: 2742095,
+              name: "Carver Elementary School",
+              cell: "3187946280",
+              email: "contact@carver.edu",
+              region: { name: "LA" },
+              lead_source: { name: "Door Knocking" },
+              rep: { name: "John Smith" },
+              project_manager: { name: "Sarah Johnson" }
+            },
+            date_created: "02/12/2025 5:33PM",
+            date_approved: "04/13/2025 10:36AM",
+            date_closed: "04/21/2025 10:12AM",
+            last_note: "Final inspection completed successfully",
+            category: 'Approved'
+          },
+          {
+            id: 3553489,
+            name: "1365 N Valleyview St, Wichita, KS  67212",
+            job_type: "r",
+            bid_type: "i",
+            job_status: { color: "#2E4053", label: "Prospect" },
+            full_address: "1365 N Valleyview St, Wichita, KS  67212",
+            customer: {
+              id: 3536312,
+              name: "Emma Powell",
+              cell: "3182008923",
+              email: "mark_powell3@hotmail.com",
+              region: { name: "Kansas" },
+              lead_source: { name: "SalesRabbit" },
+              rep: { name: "Lisa Wilson" }
+            },
+            date_created: "09/24/2025 6:20PM",
+            last_note: "Lead verification pending",
+            category: 'Prospect'
+          }
+        ]
+        setJobs(sampleJobs)
+        setError('Using sample data - API connection may need configuration')
+      }
 
     } catch (error) {
       console.error('Error fetching jobs:', error)
       setError(error instanceof Error ? error.message : 'Unknown error')
+      
+      // Even on error, show sample data
+      const sampleJobs: SimpleJob[] = [
+        {
+          id: 3235064,
+          name: "8440 Beebe Dr, Greenwood, LA, 71033",
+          job_number: "3235064",
+          job_type: "r",
+          bid_type: "i",
+          job_status: { color: "#117A65", label: "BUILD NEXT WEEK" },
+          full_address: "8440 Beebe Dr, Greenwood, LA 71033",
+          customer: {
+            id: 2742097,
+            name: "Robert Mincil (Browns Roofing)",
+            cell: "3185195200",
+            email: "tester@tester.com",
+            region: { name: "Shreveport" },
+            lead_source: { name: "Door Knocking" },
+            rep: { name: "Austin Race" },
+            project_manager: { name: "Austin Race" },
+            marketing_rep: { name: "Carter Martin" }
+          },
+          date_created: "06/24/2025 4:58PM",
+          date_approved: "08/06/2025 10:44AM",
+          last_note: "Final Check Approved 6 days ago. Next Step: Request RD",
+          category: 'Approved'
+        }
+      ]
+      setJobs(sampleJobs)
     } finally {
       setLoading(false)
     }
