@@ -42,7 +42,7 @@ function sleep(ms: number, signal?: AbortSignal) {
 }
 
 function assertApiKey(): string {
-  const apiKey = process.env.ROOFLINK_API_KEY;
+  const apiKey = process.env.ROOFLINK_API_KEY?.trim();
   if (!apiKey) {
     throw new RooflinkError(
       "Missing ROOFLINK_API_KEY. Set it in your environment variables.",
@@ -153,6 +153,7 @@ export async function rooflinkFetch<T>(
   const retries = params.retries ?? 3;
   let lastDetails: unknown = null;
   let lastStatus: number | null = null;
+  const hasBody = params.body !== undefined;
 
   for (let attempt = 1; attempt <= retries + 1; attempt++) {
     const res = await fetch(url, {
@@ -160,7 +161,7 @@ export async function rooflinkFetch<T>(
       headers: {
         Accept: "application/json",
         "X-API-KEY": apiKey,
-        "Content-Type": "application/json",
+        ...(hasBody ? { "Content-Type": "application/json" } : {}),
         ...(params.headers ?? {}),
       },
       body: params.body === undefined ? undefined : JSON.stringify(params.body),
