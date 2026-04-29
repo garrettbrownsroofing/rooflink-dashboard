@@ -10,6 +10,51 @@ export default function Home() {
             If you can see this, Vercel is deploying the latest commit.
           </div>
         </div>
+        <div className="w-full max-w-xl rounded-xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 p-6 flex items-center gap-4">
+          <div className="shrink-0">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 256 256"
+              width="88"
+              height="88"
+              role="img"
+              aria-label="Smiley face"
+            >
+              <defs>
+                <radialGradient id="g" cx="35%" cy="30%" r="70%">
+                  <stop offset="0%" stopColor="#fff59d" />
+                  <stop offset="60%" stopColor="#fdd835" />
+                  <stop offset="100%" stopColor="#f9a825" />
+                </radialGradient>
+              </defs>
+              <circle
+                cx="128"
+                cy="128"
+                r="110"
+                fill="url(#g)"
+                stroke="currentColor"
+                strokeWidth="10"
+              />
+              <circle cx="88" cy="104" r="14" fill="currentColor" />
+              <circle cx="168" cy="104" r="14" fill="currentColor" />
+              <path
+                d="M78 150c12 28 38 46 50 46s38-18 50-46"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="14"
+              />
+              <circle cx="86" cy="96" r="5" fill="#ffffff" opacity="0.75" />
+              <circle cx="166" cy="96" r="5" fill="#ffffff" opacity="0.75" />
+            </svg>
+          </div>
+          <div>
+            <div className="font-semibold">Smiley deploy test</div>
+            <div className="text-black/70 dark:text-white/70 text-sm">
+              This smiley is inlined in the page to confirm deploys visually.
+            </div>
+          </div>
+        </div>
         <Image
           className="dark:invert"
           src="/next.svg"
