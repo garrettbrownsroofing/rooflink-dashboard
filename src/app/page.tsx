@@ -4,6 +4,12 @@ export default function Home() {
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
+        <div className="w-full max-w-xl rounded-xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-4 py-3 text-sm">
+          <div className="font-semibold">Deploy check</div>
+          <div className="text-black/70 dark:text-white/70">
+            If you can see this, Vercel is deploying the latest commit.
+          </div>
+        </div>
         <Image
           className="dark:invert"
           src="/next.svg"
