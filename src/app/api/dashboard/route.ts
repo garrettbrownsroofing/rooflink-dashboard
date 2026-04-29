@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { RooflinkError, rooflinkFetch } from "@/lib/rooflink";
+import { RooflinkError, rooflinkFetch, rooflinkFetchPaginated } from "@/lib/rooflink";
 
 export const runtime = "nodejs";
 
@@ -47,7 +47,21 @@ export async function GET(req: Request) {
   try {
     // Rooflink per-key rate limit is 5 req/sec; keep concurrency under that.
     const tasks = [
-      () => rooflinkFetch("/light/job-report/", { query: withDates({}, dates) }),
+      async () => {
+        const pageSize = Number(url.searchParams.get("jobs_page_size") ?? "100");
+        const safePageSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 250) : 100;
+
+        const { results, count } = await rooflinkFetchPaginated<Record<string, unknown>>(
+          "/light/job-report/",
+          {
+            query: withDates({ page_size: safePageSize }, dates),
+          },
+          { maxPages: 30 },
+        );
+
+        // Preserve a familiar paginated response shape for the UI.
+        return { results, count };
+      },
       () => rooflinkFetch("/light/jobs/pipeline/", { query: withDates({}, dates) }),
       () =>
         rooflinkFetch("/light/jobs/leads_by_source/", {
