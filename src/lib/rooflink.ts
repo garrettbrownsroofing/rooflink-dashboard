@@ -21,6 +21,26 @@ export class RooflinkError extends Error {
   }
 }
 
+function sleep(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("Aborted"));
+      return;
+    }
+    const t = setTimeout(resolve, ms);
+    if (signal) {
+      signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(t);
+          reject(new Error("Aborted"));
+        },
+        { once: true },
+      );
+    }
+  });
+}
+
 function assertApiKey(): string {
   const apiKey = process.env.ROOFLINK_API_KEY;
   if (!apiKey) {
@@ -77,12 +97,47 @@ function errorForStatus(status: number) {
   }
 }
 
+function jitterMs(baseMs: number) {
+  // +/- up to 250ms jitter to avoid thundering herd
+  const delta = Math.floor(Math.random() * 500) - 250;
+  return Math.max(0, baseMs + delta);
+}
+
+function retryDelayMs(
+  status: number,
+  attempt: number,
+  details: unknown,
+  retryAfterHeader: string | null,
+) {
+  const headerSeconds = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+  const retryAfterSeconds =
+    Number.isFinite(headerSeconds) && headerSeconds > 0 ? headerSeconds : undefined;
+
+  const jsonRetryAfter =
+    details && typeof details === "object" && "retry_after" in (details as any)
+      ? Number((details as any).retry_after)
+      : NaN;
+  const detailsSeconds =
+    Number.isFinite(jsonRetryAfter) && jsonRetryAfter > 0 ? jsonRetryAfter : undefined;
+
+  const serverSuggestedSeconds = retryAfterSeconds ?? detailsSeconds;
+
+  // Docs recommend: 429 wait >= 2s, 503 wait >= 60s
+  const minMs = status === 503 ? 60_000 : 2_000;
+
+  // Exponential-ish backoff per attempt: 1x, 2x, 4x...
+  const backoffMs = minMs * Math.pow(2, Math.max(0, attempt - 1));
+  const serverMs = serverSuggestedSeconds ? serverSuggestedSeconds * 1000 : 0;
+  return jitterMs(Math.max(backoffMs, serverMs, minMs));
+}
+
 export type RooflinkFetchParams = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   query?: RooflinkQuery;
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
+  retries?: number;
 };
 
 const ROOFLINK_BASE_URL =
@@ -95,25 +150,45 @@ export async function rooflinkFetch<T>(
   const apiKey = assertApiKey();
   const url = buildUrl(ROOFLINK_BASE_URL, path, params.query);
 
-  const res = await fetch(url, {
-    method: params.method ?? "GET",
-    headers: {
-      Accept: "application/json",
-      "X-API-KEY": apiKey,
-      "Content-Type": "application/json",
-      ...(params.headers ?? {}),
-    },
-    body: params.body === undefined ? undefined : JSON.stringify(params.body),
-    signal: params.signal,
-    cache: "no-store",
-  });
+  const retries = params.retries ?? 3;
+  let lastDetails: unknown = null;
+  let lastStatus: number | null = null;
 
-  if (!res.ok) {
+  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    const res = await fetch(url, {
+      method: params.method ?? "GET",
+      headers: {
+        Accept: "application/json",
+        "X-API-KEY": apiKey,
+        "Content-Type": "application/json",
+        ...(params.headers ?? {}),
+      },
+      body: params.body === undefined ? undefined : JSON.stringify(params.body),
+      signal: params.signal,
+      cache: "no-store",
+    });
+
+    if (res.ok) {
+      return (await res.json()) as T;
+    }
+
     const details = await parseJsonSafe(res);
-    throw new RooflinkError(errorForStatus(res.status), res.status, details);
+    lastDetails = details;
+    lastStatus = res.status;
+
+    const canRetry = res.status === 429 || res.status === 503;
+    const hasAttemptsLeft = attempt <= retries;
+    if (!canRetry || !hasAttemptsLeft) break;
+
+    const delay = retryDelayMs(res.status, attempt, details, res.headers.get("retry-after"));
+    await sleep(delay, params.signal);
   }
 
-  return (await res.json()) as T;
+  throw new RooflinkError(
+    errorForStatus(lastStatus ?? 500),
+    lastStatus ?? 500,
+    lastDetails,
+  );
 }
 
 function getNextPage(value: unknown): string | number | null {

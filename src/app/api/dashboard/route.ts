@@ -3,6 +3,26 @@ import { RooflinkError, rooflinkFetch } from "@/lib/rooflink";
 
 export const runtime = "nodejs";
 
+async function runWithConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  concurrency: number,
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let idx = 0;
+
+  async function worker() {
+    while (true) {
+      const current = idx++;
+      if (current >= tasks.length) return;
+      results[current] = await tasks[current]();
+    }
+  }
+
+  const workers = Array.from({ length: Math.max(1, concurrency) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 function getDateParams(url: URL) {
   const date_from = url.searchParams.get("date_from") ?? undefined;
   const date_to = url.searchParams.get("date_to") ?? undefined;
@@ -25,6 +45,23 @@ export async function GET(req: Request) {
   const dates = getDateParams(url);
 
   try {
+    // Rooflink per-key rate limit is 5 req/sec; keep concurrency under that.
+    const tasks = [
+      () => rooflinkFetch("/light/job-report/", { query: withDates({}, dates) }),
+      () => rooflinkFetch("/light/jobs/pipeline/", { query: withDates({}, dates) }),
+      () =>
+        rooflinkFetch("/light/jobs/leads_by_source/", {
+          query: withDates({ type: "approved_jobs" }, dates),
+        }),
+      () => rooflinkFetch("/light/jobs/leads_by_reps/", { query: withDates({}, dates) }),
+      () =>
+        rooflinkFetch("/light/jobs/sales_trend/", {
+          query: withDates({ freq: "monthly", periods: 12 }, dates),
+        }),
+      () => rooflinkFetch("/light/jobs/approved/stats/", { query: withDates({}, dates) }),
+      () => rooflinkFetch("/light/jobs/prospect/stats/", { query: withDates({}, dates) }),
+    ];
+
     const [
       jobReport,
       pipeline,
@@ -33,19 +70,7 @@ export async function GET(req: Request) {
       salesTrend,
       approvedStats,
       prospectStats,
-    ] = await Promise.all([
-      rooflinkFetch("/light/job-report/", { query: withDates({}, dates) }),
-      rooflinkFetch("/light/jobs/pipeline/", { query: withDates({}, dates) }),
-      rooflinkFetch("/light/jobs/leads_by_source/", {
-        query: withDates({ type: "approved_jobs" }, dates),
-      }),
-      rooflinkFetch("/light/jobs/leads_by_reps/", { query: withDates({}, dates) }),
-      rooflinkFetch("/light/jobs/sales_trend/", {
-        query: withDates({ freq: "monthly", periods: 12 }, dates),
-      }),
-      rooflinkFetch("/light/jobs/approved/stats/", { query: withDates({}, dates) }),
-      rooflinkFetch("/light/jobs/prospect/stats/", { query: withDates({}, dates) }),
-    ]);
+    ] = await runWithConcurrency(tasks, 4);
 
     return NextResponse.json(
       {
