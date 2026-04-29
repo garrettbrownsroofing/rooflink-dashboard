@@ -18,6 +18,30 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 - Node.js 18+
 
+## Rooflink API Key (server-only)
+
+This dashboard uses **server-side API routes only**. The `ROOFLINK_API_KEY` is read on the server and is **never** sent to the browser.
+
+### Local development
+
+Create a `.env.local` file in the project root:
+
+```bash
+ROOFLINK_API_KEY=your_key_here
+```
+
+Then restart the dev server:
+
+```bash
+npm run dev
+```
+
+### Vercel
+
+- In Vercel: Project → **Settings** → **Environment Variables**
+- Add `ROOFLINK_API_KEY` (for Production / Preview as needed)
+- After adding/updating the variable, **redeploy** (or trigger a new deployment) so the build/runtime picks it up
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
