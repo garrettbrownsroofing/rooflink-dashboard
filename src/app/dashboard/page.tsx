@@ -58,6 +58,34 @@ function asArray(v: unknown) {
   return Array.isArray(v) ? v : [];
 }
 
+function getJobName(job: unknown) {
+  if (!isRecord(job)) return "—";
+  const candidates = [
+    job.name,
+    job.job_name,
+    job.title,
+    job.job_title,
+    job.customer_name,
+    job.full_address,
+    job.address,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  const id = job.id ?? job.job_id;
+  if (typeof id === "number" || typeof id === "string") return `Job ${id}`;
+  return "—";
+}
+
+function omitKeys(obj: Record<string, unknown>, keys: string[]) {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (keys.includes(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 function formatCurrency(n?: number) {
   if (n === undefined) return "—";
   return new Intl.NumberFormat(undefined, {
@@ -245,6 +273,19 @@ export default function DashboardPage() {
       .filter(Boolean) as { crew: string; jobs: number; revenue?: number }[];
   }, [payload]);
 
+  const rawJobs = useMemo(() => {
+    const raw = payload?.data.jobReport;
+    const list = asArray(isRecord(raw) ? raw.results ?? raw.jobs ?? raw.data ?? raw : raw);
+    return list.filter((x) => isRecord(x)) as Record<string, unknown>[];
+  }, [payload]);
+
+  const [jobSearch, setJobSearch] = useState("");
+  const filteredJobs = useMemo(() => {
+    const q = jobSearch.trim().toLowerCase();
+    if (!q) return rawJobs;
+    return rawJobs.filter((j) => getJobName(j).toLowerCase().includes(q));
+  }, [jobSearch, rawJobs]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-6xl px-4 py-8">
@@ -283,6 +324,101 @@ export default function DashboardPage() {
               {loading ? "Loading…" : "Refresh"}
             </button>
           </div>
+        </div>
+
+        <div className="mt-6 rounded-xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="font-semibold">Jobs (raw list)</div>
+              <div className="text-xs text-black/60 dark:text-white/60">
+                This shows the job-level payload from `/light/job-report/`. Expand a row to see all fields.
+              </div>
+            </div>
+            <label className="flex w-full flex-col gap-1 text-xs sm:max-w-sm">
+              <span className="text-black/60 dark:text-white/60">Search by job name</span>
+              <input
+                value={jobSearch}
+                onChange={(e) => setJobSearch(e.target.value)}
+                placeholder="Search…"
+                className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-3 text-sm"
+              />
+            </label>
+          </div>
+
+          <div className="mt-3 text-xs text-black/60 dark:text-white/60">
+            Showing <span className="font-medium text-foreground">{filteredJobs.length}</span>{" "}
+            of <span className="font-medium text-foreground">{rawJobs.length}</span> jobs
+          </div>
+
+          <div className="mt-3 divide-y divide-black/5 dark:divide-white/10 rounded-lg border border-black/10 dark:border-white/15 overflow-hidden">
+            {filteredJobs.slice(0, 200).map((job, i) => {
+              const name = getJobName(job);
+              const rest = omitKeys(job, [
+                "name",
+                "job_name",
+                "title",
+                "job_title",
+                "customer_name",
+                "full_address",
+                "address",
+              ]);
+
+              return (
+                <details key={`${name}-${String(job.id ?? i)}`} className="group bg-white/40 dark:bg-white/0">
+                  <summary className="cursor-pointer select-none list-none px-3 py-3 hover:bg-black/5 dark:hover:bg-white/5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{name}</div>
+                        <div className="mt-0.5 truncate text-xs text-black/60 dark:text-white/60">
+                          {typeof job.id === "number" || typeof job.id === "string"
+                            ? `ID: ${job.id}`
+                            : typeof (job as any).job_id === "number" || typeof (job as any).job_id === "string"
+                              ? `ID: ${(job as any).job_id}`
+                              : "ID: —"}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-xs text-black/60 dark:text-white/60 group-open:hidden">
+                        Expand
+                      </div>
+                      <div className="shrink-0 text-xs text-black/60 dark:text-white/60 hidden group-open:block">
+                        Collapse
+                      </div>
+                    </div>
+                  </summary>
+                  <div className="px-3 pb-4">
+                    <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      <div className="rounded-lg border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 p-3">
+                        <div className="text-xs font-medium text-black/60 dark:text-white/60">Raw job JSON</div>
+                        <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-black/5 dark:bg-white/10 p-2 text-[11px] leading-relaxed">
+                          {JSON.stringify(job, null, 2)}
+                        </pre>
+                      </div>
+                      <div className="rounded-lg border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 p-3">
+                        <div className="text-xs font-medium text-black/60 dark:text-white/60">
+                          Fields (excluding name-ish)
+                        </div>
+                        <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-black/5 dark:bg-white/10 p-2 text-[11px] leading-relaxed">
+                          {JSON.stringify(rest, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              );
+            })}
+
+            {!loading && !error && rawJobs.length === 0 ? (
+              <div className="px-3 py-4 text-sm text-black/60 dark:text-white/60">
+                No job-level data returned from `/light/job-report/` for this date range.
+              </div>
+            ) : null}
+          </div>
+
+          {filteredJobs.length > 200 ? (
+            <div className="mt-3 text-xs text-black/60 dark:text-white/60">
+              Showing first 200 results. Refine your search to narrow it down.
+            </div>
+          ) : null}
         </div>
 
         {error ? (
