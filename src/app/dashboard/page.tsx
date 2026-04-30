@@ -38,6 +38,8 @@ type ApiResponse = ApiOk | ApiErr;
 
 type JobsOk = {
   ok: true;
+  source?: string;
+  endpoint?: string;
   page: number;
   page_size: number;
   dates: { date_from?: string; date_to?: string };
@@ -174,6 +176,8 @@ export default function DashboardPage() {
   const [jobsPageSize] = useState(50);
   const [jobsTotal, setJobsTotal] = useState<number | undefined>(undefined);
   const [jobsHasMore, setJobsHasMore] = useState(true);
+  const [jobsSource, setJobsSource] = useState<"jobs" | "job-report">("jobs");
+  const [jobsEndpoint, setJobsEndpoint] = useState<string | undefined>(undefined);
 
   async function load() {
     setLoading(true);
@@ -203,7 +207,9 @@ export default function DashboardPage() {
 
     const nextPage = reset ? 1 : jobsPage;
     try {
-      const res = await fetch(buildJobsUrl(dateFrom, dateTo, nextPage, jobsPageSize), {
+      const u = new URL(buildJobsUrl(dateFrom, dateTo, nextPage, jobsPageSize));
+      u.searchParams.set("source", jobsSource);
+      const res = await fetch(u.toString(), {
         cache: "no-store",
       });
       const data = (await res.json()) as JobsResponse;
@@ -212,6 +218,7 @@ export default function DashboardPage() {
         return;
       }
 
+      setJobsEndpoint(data.endpoint);
       const listRaw = isRecord(data.data)
         ? (data.data.results ?? data.data.jobs ?? data.data.data ?? data.data)
         : data.data;
@@ -244,6 +251,12 @@ export default function DashboardPage() {
     void loadJobs({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    // Switching job source should reset paging.
+    void loadJobs({ reset: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobsSource]);
 
   const kpis = useMemo(() => {
     const approved = payload?.data.approvedStats;
@@ -436,16 +449,35 @@ export default function DashboardPage() {
               <div className="text-xs text-black/60 dark:text-white/60">
                 Jobs load in pages for speed. Expand a row to see all fields.
               </div>
+                <div className="mt-1 text-xs text-black/60 dark:text-white/60">
+                  Source:{" "}
+                  <span className="font-medium text-foreground">
+                    {jobsSource === "jobs" ? "All Jobs (/light/jobs/)" : "Job Report (/light/job-report/)"}
+                  </span>
+                </div>
             </div>
-            <label className="flex w-full flex-col gap-1 text-xs sm:max-w-sm">
-              <span className="text-black/60 dark:text-white/60">Search by job name</span>
-              <input
-                value={jobSearch}
-                onChange={(e) => setJobSearch(e.target.value)}
-                placeholder="Search…"
-                className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-3 text-sm"
-              />
-            </label>
+              <div className="flex w-full flex-col gap-3 sm:max-w-sm">
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="text-black/60 dark:text-white/60">Job source</span>
+                  <select
+                    value={jobsSource}
+                    onChange={(e) => setJobsSource(e.target.value as "jobs" | "job-report")}
+                    className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-3 text-sm"
+                  >
+                    <option value="jobs">All jobs</option>
+                    <option value="job-report">Job report</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="text-black/60 dark:text-white/60">Search by job name</span>
+                  <input
+                    value={jobSearch}
+                    onChange={(e) => setJobSearch(e.target.value)}
+                    placeholder="Search…"
+                    className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-3 text-sm"
+                  />
+                </label>
+              </div>
           </div>
 
           <div className="mt-3 text-xs text-black/60 dark:text-white/60">
@@ -537,6 +569,9 @@ export default function DashboardPage() {
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-xs text-black/60 dark:text-white/60">
               Loaded {formatNumber(rawJobs.length)} job rows locally.
+              {jobsEndpoint ? (
+                <span className="ml-2 opacity-80">Endpoint: {jobsEndpoint}</span>
+              ) : null}
             </div>
             <div className="flex gap-2">
               <button

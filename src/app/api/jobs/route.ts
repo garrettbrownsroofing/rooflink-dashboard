@@ -25,15 +25,23 @@ function toPositiveInt(value: string | null, fallback: number) {
   return Math.floor(n);
 }
 
+function pickSource(url: URL) {
+  const raw = (url.searchParams.get("source") ?? "jobs").toLowerCase();
+  if (raw === "job-report" || raw === "job_report" || raw === "jobreport") return "job-report";
+  return "jobs";
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const dates = getDateParams(url);
+  const source = pickSource(url);
 
   const page = toPositiveInt(url.searchParams.get("page"), 1);
   const page_size = Math.min(toPositiveInt(url.searchParams.get("page_size"), 50), 250);
 
   // Cache key: endpoint + query string (minus origin)
   const cacheKey = `${url.pathname}?${new URLSearchParams({
+    source,
     ...(dates.date_from ? { date_from: dates.date_from } : {}),
     ...(dates.date_to ? { date_to: dates.date_to } : {}),
     page: String(page),
@@ -48,7 +56,8 @@ export async function GET(req: Request) {
   }
 
   try {
-    const data = await rooflinkFetch("/light/job-report/", {
+    const endpoint = source === "jobs" ? "/light/jobs/" : "/light/job-report/";
+    const data = await rooflinkFetch(endpoint, {
       query: {
         ...(dates.date_from ? { date_from: dates.date_from } : {}),
         ...(dates.date_to ? { date_to: dates.date_to } : {}),
@@ -57,7 +66,7 @@ export async function GET(req: Request) {
       },
     });
 
-    const body = { ok: true, page, page_size, dates, data };
+    const body = { ok: true, source, endpoint, page, page_size, dates, data };
     cache.set(cacheKey, { ts: now, data: body });
     return NextResponse.json(body, { status: 200 });
   } catch (err) {
