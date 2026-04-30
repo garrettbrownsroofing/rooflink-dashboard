@@ -612,6 +612,7 @@ export default function ScorecardPage() {
   const locations: ScorecardLocation[] = ["Baton Rouge", "Monroe", "Shreveport", "Arkansas", "Kansas", "Overall"];
   const [selectedRegion, setSelectedRegion] = useState<ScorecardLocation | "All Locations">("All Locations");
   const [selectedQuarter, setSelectedQuarter] = useState<Quarter | "All Quarters">("All Quarters");
+  const [showWeekly, setShowWeekly] = useState(false);
 
   function statusClass(actual: number | null | undefined, goal: number | null | undefined) {
     if (actual === null || actual === undefined) return "";
@@ -719,15 +720,25 @@ export default function ScorecardPage() {
                 <option value={4}>Q4</option>
               </select>
             </label>
+
+            <label className="flex items-end gap-2 text-xs col-span-2 sm:col-span-1">
+              <input
+                type="checkbox"
+                checked={showWeekly}
+                onChange={(e) => setShowWeekly(e.target.checked)}
+                className="h-4 w-4 rounded border-black/20 dark:border-white/30"
+              />
+              <span className="text-black/70 dark:text-white/70">Show weekly columns</span>
+            </label>
           </div>
         </div>
 
         <div className="mt-6 overflow-hidden rounded-xl border border-black/10 dark:border-white/15 bg-white/60 dark:bg-white/5">
           <div className="overflow-auto">
-            <table className="w-full min-w-[2400px] border-collapse text-sm">
+            <table className="w-full min-w-[1600px] border-collapse text-sm">
               <thead className="sticky top-0 z-10 bg-white/90 dark:bg-black/30 backdrop-blur">
                 <tr className="text-xs text-black/60 dark:text-white/60">
-                  <th rowSpan={2} className="px-3 py-2 text-left font-medium">
+                  <th rowSpan={2} className="sticky left-0 z-20 bg-white/90 dark:bg-black/60 px-3 py-2 text-left font-medium">
                     Metric
                   </th>
                   <th rowSpan={2} className="px-3 py-2 text-right font-medium">
@@ -740,7 +751,11 @@ export default function ScorecardPage() {
                     YTD Std
                   </th>
                   {visibleQuarters.map((q) => (
-                    <th key={q} colSpan={2 + 13} className="px-3 py-2 text-center font-medium">
+                    <th
+                      key={q}
+                      colSpan={2 + (showWeekly ? 13 : 0)}
+                      className="px-3 py-2 text-center font-medium"
+                    >
                       Q{q}
                     </th>
                   ))}
@@ -754,11 +769,13 @@ export default function ScorecardPage() {
                       <th key={`q${q}-goal`} className="px-3 py-2 text-right font-medium">
                         Weekly Goal
                       </th>
-                      {reportingAll[String(q)].map((d) => (
-                        <th key={`q${q}-${d}`} className="px-3 py-2 text-right font-medium">
-                          {d}
-                        </th>
-                      ))}
+                      {showWeekly
+                        ? reportingAll[String(q)].map((d) => (
+                            <th key={`q${q}-${d}`} className="px-3 py-2 text-right font-medium">
+                              {d}
+                            </th>
+                          ))
+                        : null}
                     </>
                   ))}
                 </tr>
@@ -767,7 +784,10 @@ export default function ScorecardPage() {
                 {visibleLocations.map((loc) => (
                   <>
                     <tr key={`${loc}-hdr`} className="bg-black/5 dark:bg-white/10">
-                      <td colSpan={4 + visibleQuarters.length * (2 + 13)} className="px-3 py-2 text-sm font-semibold">
+                      <td
+                        colSpan={4 + visibleQuarters.length * (2 + (showWeekly ? 13 : 0))}
+                        className="sticky left-0 z-10 bg-black/5 dark:bg-white/10 px-3 py-2 text-sm font-semibold"
+                      >
                         {loc}
                       </td>
                     </tr>
@@ -777,7 +797,7 @@ export default function ScorecardPage() {
 
                       return (
                         <tr key={`${loc}-${metric.slug}`} className="border-t border-black/5 dark:border-white/10">
-                          <td className="px-3 py-2 text-left">
+                          <td className="sticky left-0 z-10 bg-white/80 dark:bg-black/40 px-3 py-2 text-left">
                             <div className="font-medium">{metric.name}</div>
                             <div className="text-[11px] text-black/50 dark:text-white/50">{metric.category}</div>
                           </td>
@@ -804,14 +824,16 @@ export default function ScorecardPage() {
                                 <td key={`${loc}-${metric.slug}-q${q}-goal`} className="px-3 py-2 text-right tabular-nums">
                                   {formatMaybe(metric, qGoal)}
                                 </td>
-                                {weeks.map((v, idx) => (
-                                  <td
-                                    key={`${loc}-${metric.slug}-q${q}-w${idx}`}
-                                    className={`px-3 py-2 text-right tabular-nums ${statusClass(v ?? null, qGoal ?? null)}`}
-                                  >
-                                    {formatMaybe(metric, v)}
-                                  </td>
-                                ))}
+                                {showWeekly
+                                  ? weeks.map((v, idx) => (
+                                      <td
+                                        key={`${loc}-${metric.slug}-q${q}-w${idx}`}
+                                        className={`px-3 py-2 text-right tabular-nums ${statusClass(v ?? null, qGoal ?? null)}`}
+                                      >
+                                        {formatMaybe(metric, v)}
+                                      </td>
+                                    ))
+                                  : null}
                               </>
                             );
                           })}
@@ -837,14 +859,16 @@ export default function ScorecardPage() {
                             {formatMaybe(metric, sumAcrossLocationsQuarterActual(slug, q))}
                           </td>
                           <td key={`tot-${slug}-q${q}-goal`} className="px-3 py-2" />
-                          {Array.from({ length: 13 }, (_, idx) => (
-                            <td
-                              key={`tot-${slug}-q${q}-w${idx}`}
-                              className="px-3 py-2 text-right tabular-nums font-semibold"
-                            >
-                              {formatMaybe(metric, sumAcrossLocations(slug, q, idx))}
-                            </td>
-                          ))}
+                          {showWeekly
+                            ? Array.from({ length: 13 }, (_, idx) => (
+                                <td
+                                  key={`tot-${slug}-q${q}-w${idx}`}
+                                  className="px-3 py-2 text-right tabular-nums font-semibold"
+                                >
+                                  {formatMaybe(metric, sumAcrossLocations(slug, q, idx))}
+                                </td>
+                              ))
+                            : null}
                         </>
                       ))}
                     </tr>
