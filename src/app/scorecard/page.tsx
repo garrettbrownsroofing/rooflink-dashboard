@@ -15,6 +15,7 @@ import {
   SCORECARD_DEMO_STANDARDS,
   SCORECARD_MARKETS,
   SCORECARD_METRICS,
+  SCORECARD_REPORTING_DATES,
   type MetricDefinition,
   type ScorecardMarket,
   type ScorecardMarketWithOverall,
@@ -97,6 +98,13 @@ function getMarketWeeks(
   return getQuarterWeeks(year, market, quarter);
 }
 
+function getQuarterReportingDates(year: number, quarter: Quarter) {
+  return (
+    SCORECARD_REPORTING_DATES?.[year]?.[quarter] ??
+    Array.from({ length: 13 }, (_, i) => `W${i + 1}`)
+  );
+}
+
 function calcOverallStandards(year: number, metricSlug: string, quarter?: Quarter) {
   // Overall standards are summed from markets (simple mock logic)
   if (quarter) {
@@ -131,6 +139,7 @@ export default function ScorecardPage() {
   }, [market]);
 
   const weeksForSelected = useMemo(() => getMarketWeeks(year, market, quarter), [year, market, quarter]);
+  const reportingDates = useMemo(() => getQuarterReportingDates(year, quarter), [year, quarter]);
   const byQuarterSelected = useMemo(() => {
     if (market === "Overall") {
       return {
@@ -204,11 +213,11 @@ export default function ScorecardPage() {
   const soldChartData = useMemo(() => {
     const slug = "sold_revenue";
     const data = weeksForSelected.map((w, idx) => ({
-      week: `W${idx + 1}`,
+      week: reportingDates[idx] ?? `W${idx + 1}`,
       value: Number(w[slug] ?? 0) || 0,
     }));
     return data;
-  }, [weeksForSelected]);
+  }, [weeksForSelected, reportingDates]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -273,11 +282,14 @@ export default function ScorecardPage() {
                 onChange={(e) => setWeek(Number(e.target.value))}
                 className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-3 text-sm"
               >
-                {Array.from({ length: 13 }, (_, i) => i + 1).map((w) => (
-                  <option key={w} value={w}>
-                    W{w}
-                  </option>
-                ))}
+                {reportingDates.map((label, idx) => {
+                  const w = idx + 1;
+                  return (
+                    <option key={label} value={w}>
+                      {label}
+                    </option>
+                  );
+                })}
               </select>
             </label>
           </div>
@@ -333,9 +345,9 @@ export default function ScorecardPage() {
                 <th className="px-3 py-3 text-right font-medium">Quarter Actual</th>
                 <th className="px-3 py-3 text-right font-medium">Qtr Std</th>
                 <th className="px-3 py-3 text-right font-medium">Req Weekly Pace</th>
-                {Array.from({ length: 13 }, (_, i) => (
-                  <th key={i} className="px-3 py-3 text-right font-medium">
-                    W{i + 1}
+                {reportingDates.map((label, idx) => (
+                  <th key={label + idx} className="px-3 py-3 text-right font-medium">
+                    {label}
                   </th>
                 ))}
               </tr>
@@ -529,7 +541,9 @@ function MarketBlock(props: {
               {formatMetricValue(reqWeekly, metric.displayFormat)}
             </td>
             {weeks.map((w, idx) => {
-              const val = Number(w[metric.slug] ?? 0) || 0;
+              const raw = (w as any)?.[metric.slug];
+              const hasValue = raw !== null && raw !== undefined && raw !== "";
+              const val = hasValue ? Number(raw) : null;
               const isEditable = metric.calculationType === "SUM" || metric.calculationType === "SNAPSHOT" || metric.calculationType === "MANUAL";
               const isReadOnly = metric.calculationType === "RATIO";
               return (
@@ -544,13 +558,13 @@ function MarketBlock(props: {
                     }
                   >
                     {metric.displayFormat === "currency"
-                      ? val
-                        ? formatMetricValue(val, "currency")
+                      ? hasValue
+                        ? formatMetricValue(Number(val ?? 0), "currency")
                         : "—"
                       : metric.displayFormat === "percentage"
                         ? "—"
-                        : val
-                          ? formatMetricValue(val, "number")
+                        : hasValue
+                          ? formatMetricValue(Number(val ?? 0), "number")
                           : "—"}
                   </span>
                 </td>
