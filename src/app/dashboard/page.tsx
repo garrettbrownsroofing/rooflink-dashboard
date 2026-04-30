@@ -65,7 +65,6 @@ function getJobName(job: unknown) {
     job.job_name,
     job.title,
     job.job_title,
-    job.customer_name,
     job.full_address,
     job.address,
   ];
@@ -75,6 +74,33 @@ function getJobName(job: unknown) {
   const id = job.id ?? job.job_id;
   if (typeof id === "number" || typeof id === "string") return `Job ${id}`;
   return "—";
+}
+
+function getCustomerName(job: unknown) {
+  if (!isRecord(job)) return "";
+  const candidates = [
+    job.customer_name,
+    job.customer,
+    job.customer_full_name,
+    job.homeowner_name,
+    job.name_customer,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  if (isRecord(job.customer)) {
+    const c = job.customer;
+    const full =
+      typeof c.name === "string"
+        ? c.name
+        : typeof c.full_name === "string"
+          ? c.full_name
+          : typeof c.display_name === "string"
+            ? c.display_name
+            : "";
+    if (full.trim()) return full.trim();
+  }
+  return "";
 }
 
 function omitKeys(obj: Record<string, unknown>, keys: string[]) {
@@ -279,6 +305,12 @@ export default function DashboardPage() {
     return list.filter((x) => isRecord(x)) as Record<string, unknown>[];
   }, [payload]);
 
+  const rawJobsCount = useMemo(() => {
+    const raw = payload?.data.jobReport;
+    const count = isRecord(raw) ? toNumber(raw.count) : undefined;
+    return count;
+  }, [payload]);
+
   const [jobSearch, setJobSearch] = useState("");
   const filteredJobs = useMemo(() => {
     const q = jobSearch.trim().toLowerCase();
@@ -347,12 +379,17 @@ export default function DashboardPage() {
 
           <div className="mt-3 text-xs text-black/60 dark:text-white/60">
             Showing <span className="font-medium text-foreground">{filteredJobs.length}</span>{" "}
-            of <span className="font-medium text-foreground">{rawJobs.length}</span> jobs
+            of{" "}
+            <span className="font-medium text-foreground">
+              {rawJobsCount !== undefined ? formatNumber(rawJobsCount) : formatNumber(rawJobs.length)}
+            </span>{" "}
+            jobs
           </div>
 
           <div className="mt-3 divide-y divide-black/5 dark:divide-white/10 rounded-lg border border-black/10 dark:border-white/15 overflow-hidden">
             {filteredJobs.slice(0, 200).map((job, i) => {
               const name = getJobName(job);
+              const customer = getCustomerName(job);
               const rest = omitKeys(job, [
                 "name",
                 "job_name",
@@ -369,6 +406,11 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium">{name}</div>
+                        {customer ? (
+                          <div className="mt-0.5 truncate text-xs text-black/60 dark:text-white/60">
+                            Customer: {customer}
+                          </div>
+                        ) : null}
                         <div className="mt-0.5 truncate text-xs text-black/60 dark:text-white/60">
                           {typeof job.id === "number" || typeof job.id === "string"
                             ? `ID: ${job.id}`

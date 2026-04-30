@@ -49,14 +49,21 @@ export async function GET(req: Request) {
     const tasks = [
       async () => {
         const pageSize = Number(url.searchParams.get("jobs_page_size") ?? "100");
-        const safePageSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 250) : 100;
+        const safePageSize =
+          Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 250) : 100;
+
+        const maxPagesParam = Number(url.searchParams.get("jobs_max_pages") ?? "100");
+        const safeMaxPages =
+          Number.isFinite(maxPagesParam) && maxPagesParam > 0
+            ? Math.min(maxPagesParam, 200)
+            : 100;
 
         const { results, count } = await rooflinkFetchPaginated<Record<string, unknown>>(
           "/light/job-report/",
           {
             query: withDates({ page_size: safePageSize }, dates),
           },
-          { maxPages: 30 },
+          { maxPages: safeMaxPages },
         );
 
         // Preserve a familiar paginated response shape for the UI.
