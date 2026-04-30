@@ -610,6 +610,8 @@ export default function ScorecardPage() {
 
   const quarters: Quarter[] = [1, 2, 3, 4];
   const locations: ScorecardLocation[] = ["Baton Rouge", "Monroe", "Shreveport", "Arkansas", "Kansas", "Overall"];
+  const [selectedRegion, setSelectedRegion] = useState<ScorecardLocation | "All Locations">("All Locations");
+  const [selectedQuarter, setSelectedQuarter] = useState<Quarter | "All Quarters">("All Quarters");
 
   function statusClass(actual: number | null | undefined, goal: number | null | undefined) {
     if (actual === null || actual === undefined) return "";
@@ -647,6 +649,16 @@ export default function ScorecardPage() {
     return total;
   }
 
+  const visibleLocations = useMemo(() => {
+    if (selectedRegion === "All Locations") return locations;
+    return [selectedRegion];
+  }, [locations, selectedRegion]);
+
+  const visibleQuarters = useMemo(() => {
+    if (selectedQuarter === "All Quarters") return quarters;
+    return [selectedQuarter];
+  }, [quarters, selectedQuarter]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1400px] px-4 py-8">
@@ -673,6 +685,40 @@ export default function ScorecardPage() {
                 ))}
               </select>
             </label>
+
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-black/60 dark:text-white/60">Region</span>
+              <select
+                value={selectedRegion}
+                onChange={(e) => setSelectedRegion(e.target.value as any)}
+                className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-3 text-sm"
+              >
+                <option value="All Locations">All Locations</option>
+                {locations.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-black/60 dark:text-white/60">Quarter</span>
+              <select
+                value={selectedQuarter}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSelectedQuarter(v === "All Quarters" ? "All Quarters" : (Number(v) as Quarter));
+                }}
+                className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-3 text-sm"
+              >
+                <option value="All Quarters">All Quarters</option>
+                <option value={1}>Q1</option>
+                <option value={2}>Q2</option>
+                <option value={3}>Q3</option>
+                <option value={4}>Q4</option>
+              </select>
+            </label>
           </div>
         </div>
 
@@ -693,14 +739,14 @@ export default function ScorecardPage() {
                   <th rowSpan={2} className="px-3 py-2 text-right font-medium">
                     YTD Std
                   </th>
-                  {quarters.map((q) => (
+                  {visibleQuarters.map((q) => (
                     <th key={q} colSpan={2 + 13} className="px-3 py-2 text-center font-medium">
                       Q{q}
                     </th>
                   ))}
                 </tr>
                 <tr className="text-xs text-black/60 dark:text-white/60">
-                  {quarters.map((q) => (
+                  {visibleQuarters.map((q) => (
                     <>
                       <th key={`q${q}-act`} className="px-3 py-2 text-right font-medium">
                         Act
@@ -718,16 +764,16 @@ export default function ScorecardPage() {
                 </tr>
               </thead>
               <tbody>
-                {locations.map((loc) => (
+                {visibleLocations.map((loc) => (
                   <>
                     <tr key={`${loc}-hdr`} className="bg-black/5 dark:bg-white/10">
-                      <td colSpan={4 + quarters.length * (2 + 13)} className="px-3 py-2 text-sm font-semibold">
+                      <td colSpan={4 + visibleQuarters.length * (2 + 13)} className="px-3 py-2 text-sm font-semibold">
                         {loc}
                       </td>
                     </tr>
                     {tableMetrics.map((metric) => {
                       const sm = getSheetMetric(year, loc, metric.slug);
-                      const annualTint = statusClass(sm?.annualActual ?? null, sm?.annualStandard ?? null);
+                      const annualTint = statusClass(sm?.annualActual ?? null, sm?.ytdStandard ?? null);
 
                       return (
                         <tr key={`${loc}-${metric.slug}`} className="border-t border-black/5 dark:border-white/10">
@@ -740,7 +786,7 @@ export default function ScorecardPage() {
                             {formatMaybe(metric, sm?.annualActual)}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums">{formatMaybe(metric, sm?.ytdStandard)}</td>
-                          {quarters.map((q) => {
+                          {visibleQuarters.map((q) => {
                             const qKey = String(q);
                             const qAct = sm?.quarterActual?.[qKey];
                             const qGoal = sm?.quarterWeeklyStandard?.[qKey];
@@ -785,7 +831,7 @@ export default function ScorecardPage() {
                       <td className="px-3 py-2" />
                       <td className="px-3 py-2" />
                       <td className="px-3 py-2" />
-                      {quarters.map((q) => (
+                      {visibleQuarters.map((q) => (
                         <>
                           <td key={`tot-${slug}-q${q}-act`} className="px-3 py-2 text-right tabular-nums font-semibold">
                             {formatMaybe(metric, sumAcrossLocationsQuarterActual(slug, q))}
