@@ -26,9 +26,11 @@ function toPositiveInt(value: string | null, fallback: number) {
 }
 
 function pickSource(url: URL) {
-  const raw = (url.searchParams.get("source") ?? "jobs").toLowerCase();
+  const raw = (url.searchParams.get("source") ?? "approved").toLowerCase();
   if (raw === "job-report" || raw === "job_report" || raw === "jobreport") return "job-report";
-  return "jobs";
+  if (raw === "jobs" || raw === "all" || raw === "everything") return "jobs";
+  if (raw === "prospect" || raw === "prospects") return "prospect";
+  return "approved";
 }
 
 export async function GET(req: Request) {
@@ -37,7 +39,11 @@ export async function GET(req: Request) {
   const source = pickSource(url);
 
   const page = toPositiveInt(url.searchParams.get("page"), 1);
-  const page_size = Math.min(toPositiveInt(url.searchParams.get("page_size"), 50), 250);
+  const requestedPageSize = toPositiveInt(url.searchParams.get("page_size"), 50);
+  const page_size =
+    source === "prospect"
+      ? Math.min(requestedPageSize, 10) // per docs: max 10
+      : Math.min(requestedPageSize, 250);
 
   // Cache key: endpoint + query string (minus origin)
   const cacheKey = `${url.pathname}?${new URLSearchParams({
@@ -56,11 +62,19 @@ export async function GET(req: Request) {
   }
 
   try {
-    const endpoint = source === "jobs" ? "/light/jobs/" : "/light/job-report/";
+    const endpoint =
+      source === "approved"
+        ? "/light/jobs/approved/"
+        : source === "prospect"
+          ? "/light/jobs/prospect/"
+          : source === "jobs"
+            ? "/light/jobs/"
+            : "/light/job-report/";
     const data = await rooflinkFetch(endpoint, {
       query: {
         ...(dates.date_from ? { date_from: dates.date_from } : {}),
         ...(dates.date_to ? { date_to: dates.date_to } : {}),
+        ...(source === "prospect" ? { date_deleted__isnull: true } : {}),
         page,
         page_size,
       },

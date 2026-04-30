@@ -176,7 +176,9 @@ export default function DashboardPage() {
   const [jobsPageSize] = useState(50);
   const [jobsTotal, setJobsTotal] = useState<number | undefined>(undefined);
   const [jobsHasMore, setJobsHasMore] = useState(true);
-  const [jobsSource, setJobsSource] = useState<"jobs" | "job-report">("jobs");
+  const [jobsSource, setJobsSource] = useState<"approved" | "prospect" | "jobs" | "job-report">(
+    "approved",
+  );
   const [jobsEndpoint, setJobsEndpoint] = useState<string | undefined>(undefined);
 
   async function load() {
@@ -452,7 +454,13 @@ export default function DashboardPage() {
                 <div className="mt-1 text-xs text-black/60 dark:text-white/60">
                   Source:{" "}
                   <span className="font-medium text-foreground">
-                    {jobsSource === "jobs" ? "All Jobs (/light/jobs/)" : "Job Report (/light/job-report/)"}
+                    {jobsSource === "approved"
+                      ? "Approved jobs (/light/jobs/approved/)"
+                      : jobsSource === "prospect"
+                        ? "Prospects (/light/jobs/prospect/)"
+                        : jobsSource === "jobs"
+                          ? "Everything (/light/jobs/)"
+                          : "Job report (/light/job-report/)"}
                   </span>
                 </div>
             </div>
@@ -461,11 +469,17 @@ export default function DashboardPage() {
                   <span className="text-black/60 dark:text-white/60">Job source</span>
                   <select
                     value={jobsSource}
-                    onChange={(e) => setJobsSource(e.target.value as "jobs" | "job-report")}
+                    onChange={(e) =>
+                      setJobsSource(
+                        e.target.value as "approved" | "prospect" | "jobs" | "job-report",
+                      )
+                    }
                     className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-3 text-sm"
                   >
-                    <option value="jobs">All jobs</option>
+                    <option value="approved">Approved jobs</option>
+                    <option value="prospect">Prospects</option>
                     <option value="job-report">Job report</option>
+                    <option value="jobs">Everything (debug)</option>
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs">
