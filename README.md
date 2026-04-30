@@ -22,6 +22,10 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 This dashboard uses **server-side API routes only**. The `ROOFLINK_API_KEY` is read on the server and is **never** sent to the browser.
 
+### Read-only safety
+
+This app is **read-only by default** and will **block any non-GET** requests to Rooflink (POST/PUT/PATCH/DELETE). No data will be created, updated, or deleted from Rooflink unless you explicitly opt in.
+
 ### Local development
 
 Create a `.env.local` file in the project root:

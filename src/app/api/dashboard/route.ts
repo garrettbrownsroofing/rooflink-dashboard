@@ -50,20 +50,30 @@ export async function GET(req: Request) {
       // Keep dashboard fast: only fetch a small "summary page" for job-report.
       () =>
         rooflinkFetch("/light/job-report/", {
+          method: "GET",
           query: withDates({ page: 1, page_size: 1 }, dates),
         }),
-      () => rooflinkFetch("/light/jobs/pipeline/", { query: withDates({}, dates) }),
+      () =>
+        rooflinkFetch("/light/jobs/pipeline/", { method: "GET", query: withDates({}, dates) }),
       () =>
         rooflinkFetch("/light/jobs/leads_by_source/", {
+          method: "GET",
           query: withDates({ type: "approved_jobs" }, dates),
         }),
-      () => rooflinkFetch("/light/jobs/leads_by_reps/", { query: withDates({}, dates) }),
+      () =>
+        rooflinkFetch("/light/jobs/leads_by_reps/", {
+          method: "GET",
+          query: withDates({}, dates),
+        }),
       () =>
         rooflinkFetch("/light/jobs/sales_trend/", {
+          method: "GET",
           query: withDates({ freq: "monthly", periods: 12 }, dates),
         }),
-      () => rooflinkFetch("/light/jobs/approved/stats/", { query: withDates({}, dates) }),
-      () => rooflinkFetch("/light/jobs/prospect/stats/", { query: withDates({}, dates) }),
+      () =>
+        rooflinkFetch("/light/jobs/approved/stats/", { method: "GET", query: withDates({}, dates) }),
+      () =>
+        rooflinkFetch("/light/jobs/prospect/stats/", { method: "GET", query: withDates({}, dates) }),
     ];
 
     const [

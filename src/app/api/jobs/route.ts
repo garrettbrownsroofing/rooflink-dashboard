@@ -71,6 +71,7 @@ export async function GET(req: Request) {
             ? "/light/jobs/"
             : "/light/job-report/";
     const data = await rooflinkFetch(endpoint, {
+      method: "GET",
       query: {
         ...(dates.date_from ? { date_from: dates.date_from } : {}),
         ...(dates.date_to ? { date_to: dates.date_to } : {}),

@@ -150,6 +150,16 @@ export async function rooflinkFetch<T>(
   const apiKey = assertApiKey();
   const url = buildUrl(ROOFLINK_BASE_URL, path, params.query);
 
+  const method = params.method ?? "GET";
+  const allowMutations = process.env.ROOFLINK_ALLOW_MUTATIONS === "true";
+  if (method !== "GET" && !allowMutations) {
+    throw new RooflinkError(
+      `Blocked non-GET Rooflink request (${method}). This app is read-only by default.`,
+      400,
+      { method, path },
+    );
+  }
+
   const retries = params.retries ?? 3;
   let lastDetails: unknown = null;
   let lastStatus: number | null = null;
@@ -157,7 +167,7 @@ export async function rooflinkFetch<T>(
 
   for (let attempt = 1; attempt <= retries + 1; attempt++) {
     const res = await fetch(url, {
-      method: params.method ?? "GET",
+      method,
       headers: {
         Accept: "application/json",
         "X-API-KEY": apiKey,
