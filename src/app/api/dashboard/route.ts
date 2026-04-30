@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { RooflinkError, rooflinkFetch, rooflinkFetchPaginated } from "@/lib/rooflink";
+import { RooflinkError, rooflinkFetch } from "@/lib/rooflink";
 
 export const runtime = "nodejs";
 
@@ -47,28 +47,11 @@ export async function GET(req: Request) {
   try {
     // Rooflink per-key rate limit is 5 req/sec; keep concurrency under that.
     const tasks = [
-      async () => {
-        const pageSize = Number(url.searchParams.get("jobs_page_size") ?? "100");
-        const safePageSize =
-          Number.isFinite(pageSize) && pageSize > 0 ? Math.min(pageSize, 250) : 100;
-
-        const maxPagesParam = Number(url.searchParams.get("jobs_max_pages") ?? "100");
-        const safeMaxPages =
-          Number.isFinite(maxPagesParam) && maxPagesParam > 0
-            ? Math.min(maxPagesParam, 200)
-            : 100;
-
-        const { results, count } = await rooflinkFetchPaginated<Record<string, unknown>>(
-          "/light/job-report/",
-          {
-            query: withDates({ page_size: safePageSize }, dates),
-          },
-          { maxPages: safeMaxPages },
-        );
-
-        // Preserve a familiar paginated response shape for the UI.
-        return { results, count };
-      },
+      // Keep dashboard fast: only fetch a small "summary page" for job-report.
+      () =>
+        rooflinkFetch("/light/job-report/", {
+          query: withDates({ page: 1, page_size: 1 }, dates),
+        }),
       () => rooflinkFetch("/light/jobs/pipeline/", { query: withDates({}, dates) }),
       () =>
         rooflinkFetch("/light/jobs/leads_by_source/", {

@@ -36,6 +36,23 @@ type ApiErr = {
 
 type ApiResponse = ApiOk | ApiErr;
 
+type JobsOk = {
+  ok: true;
+  page: number;
+  page_size: number;
+  dates: { date_from?: string; date_to?: string };
+  data: unknown;
+};
+
+type JobsErr = {
+  ok: false;
+  error: string;
+  status?: number;
+  details?: unknown;
+};
+
+type JobsResponse = JobsOk | JobsErr;
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
@@ -133,6 +150,15 @@ function buildUrl(dateFrom: string, dateTo: string) {
   return u.toString();
 }
 
+function buildJobsUrl(dateFrom: string, dateTo: string, page: number, pageSize: number) {
+  const u = new URL("/api/jobs", window.location.origin);
+  if (dateFrom) u.searchParams.set("date_from", dateFrom);
+  if (dateTo) u.searchParams.set("date_to", dateTo);
+  u.searchParams.set("page", String(page));
+  u.searchParams.set("page_size", String(pageSize));
+  return u.toString();
+}
+
 export default function DashboardPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -140,6 +166,14 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<ApiOk | null>(null);
+
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [jobsError, setJobsError] = useState<string | null>(null);
+  const [jobs, setJobs] = useState<Record<string, unknown>[]>([]);
+  const [jobsPage, setJobsPage] = useState(1);
+  const [jobsPageSize] = useState(50);
+  const [jobsTotal, setJobsTotal] = useState<number | undefined>(undefined);
+  const [jobsHasMore, setJobsHasMore] = useState(true);
 
   async function load() {
     setLoading(true);
@@ -162,9 +196,52 @@ export default function DashboardPage() {
     }
   }
 
+  async function loadJobs(opts: { reset?: boolean } = {}) {
+    const reset = !!opts.reset;
+    setJobsLoading(true);
+    setJobsError(null);
+
+    const nextPage = reset ? 1 : jobsPage;
+    try {
+      const res = await fetch(buildJobsUrl(dateFrom, dateTo, nextPage, jobsPageSize), {
+        cache: "no-store",
+      });
+      const data = (await res.json()) as JobsResponse;
+      if (!data.ok) {
+        setJobsError(data.error ?? "Failed to load jobs.");
+        return;
+      }
+
+      const listRaw = isRecord(data.data)
+        ? (data.data.results ?? data.data.jobs ?? data.data.data ?? data.data)
+        : data.data;
+      const list = asArray(listRaw).filter((x) => isRecord(x)) as Record<string, unknown>[];
+
+      const total = isRecord(data.data) ? toNumber(data.data.count) : undefined;
+      const nextPageValue = isRecord(data.data) ? data.data.next_page : null;
+
+      setJobsTotal(total);
+      setJobs((prev) => (reset ? list : [...prev, ...list]));
+
+      const hasMore =
+        typeof nextPageValue === "number"
+          ? nextPageValue > nextPage
+          : typeof nextPageValue === "string"
+            ? Number(nextPageValue) > nextPage
+            : list.length === jobsPageSize; // fallback heuristic
+      setJobsHasMore(hasMore);
+      setJobsPage(reset ? 2 : nextPage + 1);
+    } catch (e) {
+      setJobsError(e instanceof Error ? e.message : "Failed to load jobs.");
+    } finally {
+      setJobsLoading(false);
+    }
+  }
+
   useEffect(() => {
     setMounted(true);
     void load();
+    void loadJobs({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -300,16 +377,10 @@ export default function DashboardPage() {
   }, [payload]);
 
   const rawJobs = useMemo(() => {
-    const raw = payload?.data.jobReport;
-    const list = asArray(isRecord(raw) ? raw.results ?? raw.jobs ?? raw.data ?? raw : raw);
-    return list.filter((x) => isRecord(x)) as Record<string, unknown>[];
-  }, [payload]);
+    return jobs;
+  }, [jobs]);
 
-  const rawJobsCount = useMemo(() => {
-    const raw = payload?.data.jobReport;
-    const count = isRecord(raw) ? toNumber(raw.count) : undefined;
-    return count;
-  }, [payload]);
+  const rawJobsCount = useMemo(() => jobsTotal, [jobsTotal]);
 
   const [jobSearch, setJobSearch] = useState("");
   const filteredJobs = useMemo(() => {
@@ -363,7 +434,7 @@ export default function DashboardPage() {
             <div>
               <div className="font-semibold">Jobs (raw list)</div>
               <div className="text-xs text-black/60 dark:text-white/60">
-                This shows the job-level payload from `/light/job-report/`. Expand a row to see all fields.
+                Jobs load in pages for speed. Expand a row to see all fields.
               </div>
             </div>
             <label className="flex w-full flex-col gap-1 text-xs sm:max-w-sm">
@@ -385,6 +456,13 @@ export default function DashboardPage() {
             </span>{" "}
             jobs
           </div>
+
+          {jobsError ? (
+            <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm">
+              <div className="font-semibold">Jobs error</div>
+              <div className="text-black/70 dark:text-white/70">{jobsError}</div>
+            </div>
+          ) : null}
 
           <div className="mt-3 divide-y divide-black/5 dark:divide-white/10 rounded-lg border border-black/10 dark:border-white/15 overflow-hidden">
             {filteredJobs.slice(0, 200).map((job, i) => {
@@ -456,11 +534,27 @@ export default function DashboardPage() {
             ) : null}
           </div>
 
-          {filteredJobs.length > 200 ? (
-            <div className="mt-3 text-xs text-black/60 dark:text-white/60">
-              Showing first 200 results. Refine your search to narrow it down.
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs text-black/60 dark:text-white/60">
+              Loaded {formatNumber(rawJobs.length)} job rows locally.
             </div>
-          ) : null}
+            <div className="flex gap-2">
+              <button
+                onClick={() => void loadJobs({ reset: true })}
+                className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-4 text-sm font-medium disabled:opacity-50"
+                disabled={jobsLoading}
+              >
+                {jobsLoading ? "Loading…" : "Reload jobs"}
+              </button>
+              <button
+                onClick={() => void loadJobs()}
+                className="h-10 rounded-md bg-black text-white dark:bg-white dark:text-black px-4 text-sm font-medium disabled:opacity-50"
+                disabled={jobsLoading || !jobsHasMore}
+              >
+                {jobsLoading ? "Loading…" : jobsHasMore ? "Load more" : "No more"}
+              </button>
+            </div>
+          </div>
         </div>
 
         {error ? (
