@@ -602,7 +602,6 @@ function MarketBlock(props: {
 export default function ScorecardPage() {
   const years = useMemo(() => Object.keys(SCORECARD_SHEET).map((y) => Number(y)).sort(), []);
   const [year, setYear] = useState<number>(years[0] ?? 2026);
-  const [location, setLocation] = useState<ScorecardLocation>("Overall");
 
   const tableMetrics = useMemo(
     () => SCORECARD_METRICS.filter((m) => m.active).sort((a, b) => a.sortOrder - b.sortOrder),
@@ -610,6 +609,43 @@ export default function ScorecardPage() {
   );
 
   const quarters: Quarter[] = [1, 2, 3, 4];
+  const locations: ScorecardLocation[] = ["Baton Rouge", "Monroe", "Shreveport", "Arkansas", "Kansas", "Overall"];
+
+  function statusClass(actual: number | null | undefined, goal: number | null | undefined) {
+    if (actual === null || actual === undefined) return "";
+    if (goal === null || goal === undefined) return "";
+    return actual >= goal
+      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      : "bg-rose-500/10 text-rose-700 dark:text-rose-300";
+  }
+
+  const reportingAll = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const q of quarters) map[String(q)] = getQuarterReportingDatesSheet(year, q);
+    return map as Record<string, string[]>;
+  }, [year]);
+
+  function sumAcrossLocations(metricSlug: string, quarter: Quarter, weekIdx: number) {
+    let total = 0;
+    for (const loc of locations) {
+      if (loc === "Overall") continue;
+      const sm = getSheetMetric(year, loc, metricSlug);
+      const v = sm?.weeks?.[String(quarter)]?.[weekIdx];
+      if (typeof v === "number" && !Number.isNaN(v)) total += v;
+    }
+    return total;
+  }
+
+  function sumAcrossLocationsQuarterActual(metricSlug: string, quarter: Quarter) {
+    let total = 0;
+    for (const loc of locations) {
+      if (loc === "Overall") continue;
+      const sm = getSheetMetric(year, loc, metricSlug);
+      const v = sm?.quarterActual?.[String(quarter)];
+      if (typeof v === "number" && !Number.isNaN(v)) total += v;
+    }
+    return total;
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -637,97 +673,140 @@ export default function ScorecardPage() {
                 ))}
               </select>
             </label>
-
-            <label className="flex flex-col gap-1 text-xs">
-              <span className="text-black/60 dark:text-white/60">Location</span>
-              <select
-                value={location}
-                onChange={(e) => setLocation(e.target.value as ScorecardLocation)}
-                className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-3 text-sm"
-              >
-                {(["Overall", ...SCORECARD_MARKETS] as ScorecardLocation[]).map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
         </div>
 
-        <div className="mt-6 space-y-6">
-          {quarters.map((q) => {
-            const reportingDates = getQuarterReportingDatesSheet(year, q);
-            const qKey = String(q);
+        <div className="mt-6 overflow-hidden rounded-xl border border-black/10 dark:border-white/15 bg-white/60 dark:bg-white/5">
+          <div className="overflow-auto">
+            <table className="w-full min-w-[2400px] border-collapse text-sm">
+              <thead className="sticky top-0 z-10 bg-white/90 dark:bg-black/30 backdrop-blur">
+                <tr className="text-xs text-black/60 dark:text-white/60">
+                  <th rowSpan={2} className="px-3 py-2 text-left font-medium">
+                    Metric
+                  </th>
+                  <th rowSpan={2} className="px-3 py-2 text-right font-medium">
+                    Annual Std
+                  </th>
+                  <th rowSpan={2} className="px-3 py-2 text-right font-medium">
+                    Annual Act
+                  </th>
+                  <th rowSpan={2} className="px-3 py-2 text-right font-medium">
+                    YTD Std
+                  </th>
+                  {quarters.map((q) => (
+                    <th key={q} colSpan={2 + 13} className="px-3 py-2 text-center font-medium">
+                      Q{q}
+                    </th>
+                  ))}
+                </tr>
+                <tr className="text-xs text-black/60 dark:text-white/60">
+                  {quarters.map((q) => (
+                    <>
+                      <th key={`q${q}-act`} className="px-3 py-2 text-right font-medium">
+                        Act
+                      </th>
+                      <th key={`q${q}-goal`} className="px-3 py-2 text-right font-medium">
+                        Weekly Goal
+                      </th>
+                      {reportingAll[String(q)].map((d) => (
+                        <th key={`q${q}-${d}`} className="px-3 py-2 text-right font-medium">
+                          {d}
+                        </th>
+                      ))}
+                    </>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {locations.map((loc) => (
+                  <>
+                    <tr key={`${loc}-hdr`} className="bg-black/5 dark:bg-white/10">
+                      <td colSpan={4 + quarters.length * (2 + 13)} className="px-3 py-2 text-sm font-semibold">
+                        {loc}
+                      </td>
+                    </tr>
+                    {tableMetrics.map((metric) => {
+                      const sm = getSheetMetric(year, loc, metric.slug);
+                      const annualTint = statusClass(sm?.annualActual ?? null, sm?.annualStandard ?? null);
 
-            return (
-              <div
-                key={q}
-                className="overflow-hidden rounded-xl border border-black/10 dark:border-white/15 bg-white/60 dark:bg-white/5"
-              >
-                <div className="flex items-center justify-between gap-3 border-b border-black/10 dark:border-white/15 px-4 py-3">
-                  <div className="text-sm font-medium">Quarter {q}</div>
-                  <div className="text-xs text-black/60 dark:text-white/60">
-                    {reportingDates[0]} – {reportingDates[reportingDates.length - 1]}
-                  </div>
-                </div>
-                <div className="overflow-auto">
-                  <table className="w-full min-w-[1400px] border-collapse text-sm">
-                    <thead className="sticky top-0 z-10 bg-white/90 dark:bg-black/30 backdrop-blur">
-                      <tr className="text-xs text-black/60 dark:text-white/60">
-                        <th className="px-3 py-2 text-left font-medium">Metric</th>
-                        <th className="px-3 py-2 text-right font-medium">Annual Std</th>
-                        <th className="px-3 py-2 text-right font-medium">Annual Act</th>
-                        <th className="px-3 py-2 text-right font-medium">YTD Std</th>
-                        <th className="px-3 py-2 text-right font-medium">Q{q} Act</th>
-                        <th className="px-3 py-2 text-right font-medium">Q{q} Weekly Goal</th>
-                        {reportingDates.map((label) => (
-                          <th key={label} className="px-3 py-2 text-right font-medium">
-                            {label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tableMetrics.map((metric) => {
-                        const sm = getSheetMetric(year, location, metric.slug);
-                        const qWeeks = sm?.weeks?.[qKey] ?? Array.from({ length: 13 }, () => null);
+                      return (
+                        <tr key={`${loc}-${metric.slug}`} className="border-t border-black/5 dark:border-white/10">
+                          <td className="px-3 py-2 text-left">
+                            <div className="font-medium">{metric.name}</div>
+                            <div className="text-[11px] text-black/50 dark:text-white/50">{metric.category}</div>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">{formatMaybe(metric, sm?.annualStandard)}</td>
+                          <td className={`px-3 py-2 text-right tabular-nums ${annualTint}`}>
+                            {formatMaybe(metric, sm?.annualActual)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">{formatMaybe(metric, sm?.ytdStandard)}</td>
+                          {quarters.map((q) => {
+                            const qKey = String(q);
+                            const qAct = sm?.quarterActual?.[qKey];
+                            const qGoal = sm?.quarterWeeklyStandard?.[qKey];
+                            const qActTint =
+                              metric.calculationType === "RATIO"
+                                ? statusClass(qAct ?? null, sm?.annualStandard ?? null)
+                                : statusClass(qAct ?? null, qGoal != null ? qGoal * 13 : null);
 
-                        return (
-                          <tr key={metric.slug} className="border-t border-black/5 dark:border-white/10">
-                            <td className="px-3 py-2 text-left">
-                              <div className="font-medium">{metric.name}</div>
-                              <div className="text-[11px] text-black/50 dark:text-white/50">{metric.category}</div>
+                            const weeks = sm?.weeks?.[qKey] ?? Array.from({ length: 13 }, () => null);
+                            return (
+                              <>
+                                <td key={`${loc}-${metric.slug}-q${q}-act`} className={`px-3 py-2 text-right tabular-nums ${qActTint}`}>
+                                  {formatMaybe(metric, qAct)}
+                                </td>
+                                <td key={`${loc}-${metric.slug}-q${q}-goal`} className="px-3 py-2 text-right tabular-nums">
+                                  {formatMaybe(metric, qGoal)}
+                                </td>
+                                {weeks.map((v, idx) => (
+                                  <td
+                                    key={`${loc}-${metric.slug}-q${q}-w${idx}`}
+                                    className={`px-3 py-2 text-right tabular-nums ${statusClass(v ?? null, qGoal ?? null)}`}
+                                  >
+                                    {formatMaybe(metric, v)}
+                                  </td>
+                                ))}
+                              </>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </>
+                ))}
+              </tbody>
+              <tfoot>
+                {(["sold_revenue", "built_revenue"] as const).map((slug) => {
+                  const metric = tableMetrics.find((m) => m.slug === slug);
+                  if (!metric) return null;
+                  return (
+                    <tr key={`totals-${slug}`} className="border-t border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/10">
+                      <td className="px-3 py-2 font-semibold">Totals (all locations): {metric.name}</td>
+                      <td className="px-3 py-2" />
+                      <td className="px-3 py-2" />
+                      <td className="px-3 py-2" />
+                      {quarters.map((q) => (
+                        <>
+                          <td key={`tot-${slug}-q${q}-act`} className="px-3 py-2 text-right tabular-nums font-semibold">
+                            {formatMaybe(metric, sumAcrossLocationsQuarterActual(slug, q))}
+                          </td>
+                          <td key={`tot-${slug}-q${q}-goal`} className="px-3 py-2" />
+                          {Array.from({ length: 13 }, (_, idx) => (
+                            <td
+                              key={`tot-${slug}-q${q}-w${idx}`}
+                              className="px-3 py-2 text-right tabular-nums font-semibold"
+                            >
+                              {formatMaybe(metric, sumAcrossLocations(slug, q, idx))}
                             </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {formatMaybe(metric, sm?.annualStandard)}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {formatMaybe(metric, sm?.annualActual)}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {formatMaybe(metric, sm?.ytdStandard)}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {formatMaybe(metric, sm?.quarterActual?.[qKey])}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {formatMaybe(metric, sm?.quarterWeeklyStandard?.[qKey])}
-                            </td>
-                            {qWeeks.map((v, idx) => (
-                              <td key={idx} className="px-3 py-2 text-right tabular-nums">
-                                {formatMaybe(metric, v)}
-                              </td>
-                            ))}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            );
-          })}
+                          ))}
+                        </>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tfoot>
+            </table>
+          </div>
         </div>
       </div>
     </div>
