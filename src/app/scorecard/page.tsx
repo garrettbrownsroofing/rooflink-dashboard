@@ -33,6 +33,12 @@ import {
   formatMetricValue,
   latestNonNull,
 } from "@/lib/scorecard-calculations";
+import {
+  SCORECARD_REPORTING_DATES as SCORECARD_REPORTING_DATES_SHEET,
+  SCORECARD_SHEET,
+  type ScorecardLocation,
+  type SheetMetric,
+} from "@/lib/scorecard-sheet-data";
 
 type Quarter = 1 | 2 | 3 | 4;
 
@@ -121,7 +127,23 @@ function calcOverallStandards(year: number, metricSlug: string, quarter?: Quarte
   );
 }
 
-export default function ScorecardPage() {
+function getQuarterReportingDatesSheet(year: number, quarter: Quarter) {
+  return (
+    SCORECARD_REPORTING_DATES_SHEET?.[String(year)]?.[String(quarter)] ??
+    Array.from({ length: 13 }, (_, i) => `W${i + 1}`)
+  );
+}
+
+function getSheetMetric(year: number, location: ScorecardLocation, metricSlug: string): SheetMetric | null {
+  return SCORECARD_SHEET?.[String(year)]?.[location]?.[metricSlug] ?? null;
+}
+
+function formatMaybe(metric: MetricDefinition, value: number | null | undefined) {
+  if (value === null || value === undefined) return "—";
+  return formatMetricValue(value, metric.displayFormat);
+}
+
+function ScorecardPageDemo() {
   const years = useMemo(() => Object.keys(SCORECARD_DEMO_DATA).map((y) => Number(y)).sort(), []);
   const [year, setYear] = useState<number>(years[0] ?? 2026);
   const [quarter, setQuarter] = useState<Quarter>(1);
@@ -574,6 +596,141 @@ function MarketBlock(props: {
         );
       })}
     </>
+  );
+}
+
+export default function ScorecardPage() {
+  const years = useMemo(() => Object.keys(SCORECARD_SHEET).map((y) => Number(y)).sort(), []);
+  const [year, setYear] = useState<number>(years[0] ?? 2026);
+  const [location, setLocation] = useState<ScorecardLocation>("Overall");
+
+  const tableMetrics = useMemo(
+    () => SCORECARD_METRICS.filter((m) => m.active).sort((a, b) => a.sortOrder - b.sortOrder),
+    [],
+  );
+
+  const quarters: Quarter[] = [1, 2, 3, 4];
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto w-full max-w-[1400px] px-4 py-8">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Browns Roofing Scorecard</h1>
+            <p className="text-sm text-black/60 dark:text-white/60">
+              Spreadsheet-exact manual scorecard (values pulled directly from the Excel export).
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-row sm:items-end">
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-black/60 dark:text-white/60">Year</span>
+              <select
+                value={year}
+                onChange={(e) => setYear(Number(e.target.value))}
+                className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-3 text-sm"
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-black/60 dark:text-white/60">Location</span>
+              <select
+                value={location}
+                onChange={(e) => setLocation(e.target.value as ScorecardLocation)}
+                className="h-10 rounded-md border border-black/10 dark:border-white/15 bg-white/70 dark:bg-white/5 px-3 text-sm"
+              >
+                {(["Overall", ...SCORECARD_MARKETS] as ScorecardLocation[]).map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-6 space-y-6">
+          {quarters.map((q) => {
+            const reportingDates = getQuarterReportingDatesSheet(year, q);
+            const qKey = String(q);
+
+            return (
+              <div
+                key={q}
+                className="overflow-hidden rounded-xl border border-black/10 dark:border-white/15 bg-white/60 dark:bg-white/5"
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-black/10 dark:border-white/15 px-4 py-3">
+                  <div className="text-sm font-medium">Quarter {q}</div>
+                  <div className="text-xs text-black/60 dark:text-white/60">
+                    {reportingDates[0]} – {reportingDates[reportingDates.length - 1]}
+                  </div>
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full min-w-[1400px] border-collapse text-sm">
+                    <thead className="sticky top-0 z-10 bg-white/90 dark:bg-black/30 backdrop-blur">
+                      <tr className="text-xs text-black/60 dark:text-white/60">
+                        <th className="px-3 py-2 text-left font-medium">Metric</th>
+                        <th className="px-3 py-2 text-right font-medium">Annual Std</th>
+                        <th className="px-3 py-2 text-right font-medium">Annual Act</th>
+                        <th className="px-3 py-2 text-right font-medium">YTD Std</th>
+                        <th className="px-3 py-2 text-right font-medium">Q{q} Act</th>
+                        <th className="px-3 py-2 text-right font-medium">Q{q} Weekly Goal</th>
+                        {reportingDates.map((label) => (
+                          <th key={label} className="px-3 py-2 text-right font-medium">
+                            {label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tableMetrics.map((metric) => {
+                        const sm = getSheetMetric(year, location, metric.slug);
+                        const qWeeks = sm?.weeks?.[qKey] ?? Array.from({ length: 13 }, () => null);
+
+                        return (
+                          <tr key={metric.slug} className="border-t border-black/5 dark:border-white/10">
+                            <td className="px-3 py-2 text-left">
+                              <div className="font-medium">{metric.name}</div>
+                              <div className="text-[11px] text-black/50 dark:text-white/50">{metric.category}</div>
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatMaybe(metric, sm?.annualStandard)}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatMaybe(metric, sm?.annualActual)}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatMaybe(metric, sm?.ytdStandard)}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatMaybe(metric, sm?.quarterActual?.[qKey])}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatMaybe(metric, sm?.quarterWeeklyStandard?.[qKey])}
+                            </td>
+                            {qWeeks.map((v, idx) => (
+                              <td key={idx} className="px-3 py-2 text-right tabular-nums">
+                                {formatMaybe(metric, v)}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
