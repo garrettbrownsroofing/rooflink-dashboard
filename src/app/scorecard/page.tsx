@@ -9,7 +9,7 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   SCORECARD_DEMO_DATA,
   SCORECARD_DEMO_STANDARDS,
@@ -660,6 +660,40 @@ export default function ScorecardPage() {
     return [selectedQuarter];
   }, [quarters, selectedQuarter]);
 
+  // Sticky left band (fixed widths so `left-*` offsets line up across header / body / footer).
+  const stickyShadow = "shadow-[4px_0_14px_-4px_rgba(0,0,0,0.18)] dark:shadow-[4px_0_14px_-4px_rgba(0,0,0,0.55)]";
+  const stickyHeadMetric =
+    "sticky left-0 z-[22] min-w-[220px] max-w-[220px] w-[220px] border-r border-black/10 bg-white/95 backdrop-blur dark:border-white/10 dark:bg-black/70";
+  const stickyHeadNum =
+    "sticky z-[22] min-w-[100px] w-[100px] border-r border-black/10 bg-white/95 backdrop-blur dark:border-white/10 dark:bg-black/70";
+  const stickyHeadAnnualStd = `${stickyHeadNum} left-[220px]`;
+  const stickyHeadAnnualAct = `${stickyHeadNum} left-[320px]`;
+  const stickyHeadYtdStd = `${stickyHeadNum} left-[420px] ${stickyShadow}`;
+
+  const stickyBodyMetric =
+    "sticky left-0 z-[12] min-w-[220px] max-w-[220px] w-[220px] border-r border-black/10 bg-white/95 backdrop-blur dark:border-white/10 dark:bg-black/55";
+  const stickyBodyNum =
+    "sticky z-[12] min-w-[100px] w-[100px] border-r border-black/10 bg-white/95 backdrop-blur dark:border-white/10 dark:bg-black/55";
+  const stickyBodyAnnualStd = `${stickyBodyNum} left-[220px]`;
+  const stickyBodyAnnualAct = `${stickyBodyNum} left-[320px]`;
+  const stickyBodyYtdStd = `${stickyBodyNum} left-[420px] ${stickyShadow}`;
+
+  const stickyLocMetric =
+    "sticky left-0 z-[13] min-w-[220px] max-w-[220px] w-[220px] border-r border-black/10 bg-black/5 backdrop-blur dark:border-white/10 dark:bg-white/10";
+  const stickyLocNum =
+    "sticky z-[13] min-w-[100px] w-[100px] border-r border-black/10 bg-black/5 backdrop-blur dark:border-white/10 dark:bg-white/10";
+  const stickyLocAnnualStd = `${stickyLocNum} left-[220px]`;
+  const stickyLocAnnualAct = `${stickyLocNum} left-[320px]`;
+  const stickyLocYtdStd = `${stickyLocNum} left-[420px] ${stickyShadow}`;
+
+  const stickyFootMetric =
+    "sticky left-0 z-[12] min-w-[220px] max-w-[220px] w-[220px] border-r border-black/10 bg-black/5 backdrop-blur dark:border-white/10 dark:bg-white/10";
+  const stickyFootNum =
+    "sticky z-[12] min-w-[100px] w-[100px] border-r border-black/10 bg-black/5 backdrop-blur dark:border-white/10 dark:bg-white/10";
+  const stickyFootAnnualStd = `${stickyFootNum} left-[220px]`;
+  const stickyFootAnnualAct = `${stickyFootNum} left-[320px]`;
+  const stickyFootYtdStd = `${stickyFootNum} left-[420px] ${stickyShadow}`;
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1400px] px-4 py-8">
@@ -735,19 +769,19 @@ export default function ScorecardPage() {
 
         <div className="mt-6 overflow-hidden rounded-xl border border-black/10 dark:border-white/15 bg-white/60 dark:bg-white/5">
           <div className="overflow-auto">
-            <table className="w-full min-w-[1600px] border-collapse text-sm">
+            <table className="w-full min-w-[1600px] border-separate border-spacing-0 text-sm">
               <thead className="sticky top-0 z-10 bg-white/90 dark:bg-black/30 backdrop-blur">
                 <tr className="text-xs text-black/60 dark:text-white/60">
-                  <th rowSpan={2} className="sticky left-0 z-20 bg-white/90 dark:bg-black/60 px-3 py-2 text-left font-medium">
+                  <th rowSpan={2} className={`${stickyHeadMetric} px-3 py-2 text-left font-medium`}>
                     Metric
                   </th>
-                  <th rowSpan={2} className="px-3 py-2 text-right font-medium">
+                  <th rowSpan={2} className={`${stickyHeadAnnualStd} px-3 py-2 text-right font-medium`}>
                     Annual Std
                   </th>
-                  <th rowSpan={2} className="px-3 py-2 text-right font-medium">
+                  <th rowSpan={2} className={`${stickyHeadAnnualAct} px-3 py-2 text-right font-medium`}>
                     Annual Act
                   </th>
-                  <th rowSpan={2} className="px-3 py-2 text-right font-medium">
+                  <th rowSpan={2} className={`${stickyHeadYtdStd} px-3 py-2 text-right font-medium`}>
                     YTD Std
                   </th>
                   {visibleQuarters.map((q) => (
@@ -762,13 +796,9 @@ export default function ScorecardPage() {
                 </tr>
                 <tr className="text-xs text-black/60 dark:text-white/60">
                   {visibleQuarters.map((q) => (
-                    <>
-                      <th key={`q${q}-act`} className="px-3 py-2 text-right font-medium">
-                        Act
-                      </th>
-                      <th key={`q${q}-goal`} className="px-3 py-2 text-right font-medium">
-                        Weekly Goal
-                      </th>
+                    <Fragment key={`hdr-q-${q}`}>
+                      <th className="px-3 py-2 text-right font-medium">Act</th>
+                      <th className="px-3 py-2 text-right font-medium">Weekly Goal</th>
                       {showWeekly
                         ? reportingAll[String(q)].map((d) => (
                             <th key={`q${q}-${d}`} className="px-3 py-2 text-right font-medium">
@@ -776,20 +806,23 @@ export default function ScorecardPage() {
                             </th>
                           ))
                         : null}
-                    </>
+                    </Fragment>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {visibleLocations.map((loc) => (
-                  <>
-                    <tr key={`${loc}-hdr`} className="bg-black/5 dark:bg-white/10">
-                      <td
-                        colSpan={4 + visibleQuarters.length * (2 + (showWeekly ? 13 : 0))}
-                        className="sticky left-0 z-10 bg-black/5 dark:bg-white/10 px-3 py-2 text-sm font-semibold"
-                      >
-                        {loc}
-                      </td>
+                  <Fragment key={`loc-block-${loc}`}>
+                    <tr className="bg-black/5 dark:bg-white/10">
+                      <td className={`${stickyLocMetric} px-3 py-2 text-sm font-semibold`}>{loc}</td>
+                      <td className={`${stickyLocAnnualStd} px-3 py-2`} />
+                      <td className={`${stickyLocAnnualAct} px-3 py-2`} />
+                      <td className={`${stickyLocYtdStd} px-3 py-2`} />
+                      {visibleQuarters.map((q) => (
+                        <Fragment key={`${loc}-hdr-pad-${q}`}>
+                          <td colSpan={2 + (showWeekly ? 13 : 0)} />
+                        </Fragment>
+                      ))}
                     </tr>
                     {tableMetrics.map((metric) => {
                       const sm = getSheetMetric(year, loc, metric.slug);
@@ -797,15 +830,19 @@ export default function ScorecardPage() {
 
                       return (
                         <tr key={`${loc}-${metric.slug}`} className="border-t border-black/5 dark:border-white/10">
-                          <td className="sticky left-0 z-10 bg-white/80 dark:bg-black/40 px-3 py-2 text-left">
+                          <td className={`${stickyBodyMetric} px-3 py-2 text-left`}>
                             <div className="font-medium">{metric.name}</div>
                             <div className="text-[11px] text-black/50 dark:text-white/50">{metric.category}</div>
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatMaybe(metric, sm?.annualStandard)}</td>
-                          <td className={`px-3 py-2 text-right tabular-nums ${annualTint}`}>
+                          <td className={`${stickyBodyAnnualStd} px-3 py-2 text-right tabular-nums`}>
+                            {formatMaybe(metric, sm?.annualStandard)}
+                          </td>
+                          <td className={`${stickyBodyAnnualAct} px-3 py-2 text-right tabular-nums ${annualTint}`}>
                             {formatMaybe(metric, sm?.annualActual)}
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatMaybe(metric, sm?.ytdStandard)}</td>
+                          <td className={`${stickyBodyYtdStd} px-3 py-2 text-right tabular-nums`}>
+                            {formatMaybe(metric, sm?.ytdStandard)}
+                          </td>
                           {visibleQuarters.map((q) => {
                             const qKey = String(q);
                             const qAct = sm?.quarterActual?.[qKey];
@@ -817,13 +854,11 @@ export default function ScorecardPage() {
 
                             const weeks = sm?.weeks?.[qKey] ?? Array.from({ length: 13 }, () => null);
                             return (
-                              <>
-                                <td key={`${loc}-${metric.slug}-q${q}-act`} className={`px-3 py-2 text-right tabular-nums ${qActTint}`}>
+                              <Fragment key={`${loc}-${metric.slug}-q-${q}`}>
+                                <td className={`px-3 py-2 text-right tabular-nums ${qActTint}`}>
                                   {formatMaybe(metric, qAct)}
                                 </td>
-                                <td key={`${loc}-${metric.slug}-q${q}-goal`} className="px-3 py-2 text-right tabular-nums">
-                                  {formatMaybe(metric, qGoal)}
-                                </td>
+                                <td className="px-3 py-2 text-right tabular-nums">{formatMaybe(metric, qGoal)}</td>
                                 {showWeekly
                                   ? weeks.map((v, idx) => (
                                       <td
@@ -834,13 +869,13 @@ export default function ScorecardPage() {
                                       </td>
                                     ))
                                   : null}
-                              </>
+                              </Fragment>
                             );
                           })}
                         </tr>
                       );
                     })}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
               <tfoot>
@@ -849,16 +884,18 @@ export default function ScorecardPage() {
                   if (!metric) return null;
                   return (
                     <tr key={`totals-${slug}`} className="border-t border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/10">
-                      <td className="px-3 py-2 font-semibold">Totals (all locations): {metric.name}</td>
-                      <td className="px-3 py-2" />
-                      <td className="px-3 py-2" />
-                      <td className="px-3 py-2" />
+                      <td className={`${stickyFootMetric} px-3 py-2 font-semibold`}>
+                        Totals (all locations): {metric.name}
+                      </td>
+                      <td className={`${stickyFootAnnualStd} px-3 py-2`} />
+                      <td className={`${stickyFootAnnualAct} px-3 py-2`} />
+                      <td className={`${stickyFootYtdStd} px-3 py-2`} />
                       {visibleQuarters.map((q) => (
-                        <>
-                          <td key={`tot-${slug}-q${q}-act`} className="px-3 py-2 text-right tabular-nums font-semibold">
+                        <Fragment key={`tot-${slug}-q-${q}`}>
+                          <td className="px-3 py-2 text-right tabular-nums font-semibold">
                             {formatMaybe(metric, sumAcrossLocationsQuarterActual(slug, q))}
                           </td>
-                          <td key={`tot-${slug}-q${q}-goal`} className="px-3 py-2" />
+                          <td className="px-3 py-2" />
                           {showWeekly
                             ? Array.from({ length: 13 }, (_, idx) => (
                                 <td
@@ -869,7 +906,7 @@ export default function ScorecardPage() {
                                 </td>
                               ))
                             : null}
-                        </>
+                        </Fragment>
                       ))}
                     </tr>
                   );
